@@ -1,10 +1,128 @@
 import { Ionicons } from '@expo/vector-icons'
+import { router, useRouter } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import React from 'react'
 import { Image, ScrollView, Text, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
+// Menu Items Array
+const menuItems = [
+  // Quick Actions
+  {
+    id: "orders",
+    title: "My Orders",
+    subtitle: "Track your orders and view history",
+    icon: "bag-handle",
+    iconColor: "#3B82F6",
+    iconBg: "#DBEAFE",
+    section: "quick",
+    onPress: () => router.push("/(routes)/my-oders")
+  },
+  {
+    id: "wishlist",
+    title: "Wishlist",
+    subtitle: "Your saved items",
+    icon: "heart",
+    iconColor: "#EF4444",
+    iconBg: "#FEE2E2",
+    section: "quick",
+    onPress: () => router.push('/wishlist')
+  },
+  {
+    id: "addresses",
+    title: "Addresses",
+    subtitle: "Manage your addresses",
+    icon: "location",
+    iconColor: "#10B981",
+    iconBg: "#D1FAE5",
+    section: "quick",
+    onPress: () => router.push("/(routes)/address")
+  },
+  {
+    id: "payments",
+    title: "Payment Methods",
+    subtitle: "Cards & wallets",
+    icon: "card",
+    iconColor: "#8B5CF6",
+    iconBg: "#EDE9FE",
+    section: "quick",
+    onPress: () => router.push('/(routes)/payments')
+  },
+
+  // Account Settings
+  {
+    id: "personal-info",
+    title: "Personal Info",
+    subtitle: "Update your details",
+    icon: "person",
+    iconColor: "#8B5CF6",
+    iconBg: "#EDE9FE",
+    section: "account",
+    onPress: () => router.push('/(routes)/personal-info')
+  },
+  {
+    id: "security",
+    title: "Security",
+    subtitle: "Password & privacy",
+    icon: "shield-checkmark",
+    iconColor: "#F59E0B",
+    iconBg: "#FEF3C7",
+    section: "account",
+    onPress: () => router.push('/(routes)/security')
+  },
+  {
+    id: "notifications",
+    title: "Notifications",
+    subtitle: "Manage alerts",
+    icon: "notifications",
+    iconColor: "#6366F1",
+    iconBg: "#E0E7FF",
+    section: "account",
+    onPress: () => router.push('/(routes)/notifications')
+  },
+ 
+
+  // Support
+  {
+    id: "help",
+    title: "Help Center",
+    subtitle: "Get help & support",
+    icon: "help-circle",
+    iconColor: "#3B82F6",
+    iconBg: "#DBEAFE",
+    section: "support",
+    onPress: () => router.push('/(routes)/help')
+  },
+  {
+    id: "contact",
+    title: "Contact Us",
+    subtitle: "24/7 customer care",
+    icon: "chatbubble-ellipses",
+    iconColor: "#10B981",
+    iconBg: "#D1FAE5",
+    section: "support",
+    onPress: () => router.push('/(routes)/contact')
+  },
+  {
+    id: "terms",
+    title: "Terms & Privacy",
+    subtitle: "Legal information",
+    icon: "document-text",
+    iconColor: "#F97316",
+    iconBg: "#FFEDD5",
+    section: "support",
+    onPress: () => router.push('/(routes)/terms')
+  }
+];
+
 export default function ProfileScreen() {
+  const router = useRouter();
+
+  // Filter items by section
+  const quickActions = menuItems.filter(item => item.section === "quick");
+  const accountSettings = menuItems.filter(item => item.section === "account");
+  const supportItems = menuItems.filter(item => item.section === "support");
+
   return (
     <SafeAreaView className='flex-1 bg-gray-50'>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff"/>
@@ -71,49 +189,25 @@ export default function ProfileScreen() {
             <Text className='text-xl font-bold text-gray-800 mb-4'>Quick Actions</Text>
             
             <View className='space-y-3'>
-              <TouchableOpacity className='flex-row items-center p-4 bg-gray-50 rounded-2xl active:bg-gray-100'>
-                <View className='w-10 h-10 bg-blue-100 rounded-xl items-center justify-center mr-4'>
-                  <Ionicons name='bag-handle' size={20} color="#3B82F6" />
-                </View>
-                <View className='flex-1'>
-                  <Text className='text-gray-800 font-semibold'>My Orders</Text>
-                  <Text className='text-gray-500 text-sm'>Track your orders</Text>
-                </View>
-                <Ionicons name='chevron-forward' size={20} color="#9CA3AF" />
-              </TouchableOpacity>
-
-              <TouchableOpacity className='flex-row items-center p-4 bg-gray-50 rounded-2xl active:bg-gray-100'>
-                <View className='w-10 h-10 bg-red-100 rounded-xl items-center justify-center mr-4'>
-                  <Ionicons name='heart' size={20} color="#EF4444" />
-                </View>
-                <View className='flex-1'>
-                  <Text className='text-gray-800 font-semibold'>Wishlist</Text>
-                  <Text className='text-gray-500 text-sm'>Your saved items</Text>
-                </View>
-                <Ionicons name='chevron-forward' size={20} color="#9CA3AF" />
-              </TouchableOpacity>
-
-              <TouchableOpacity className='flex-row items-center p-4 bg-gray-50 rounded-2xl active:bg-gray-100'>
-                <View className='w-10 h-10 bg-green-100 rounded-xl items-center justify-center mr-4'>
-                  <Ionicons name='location' size={20} color="#10B981" />
-                </View>
-                <View className='flex-1'>
-                  <Text className='text-gray-800 font-semibold'>Addresses</Text>
-                  <Text className='text-gray-500 text-sm'>Manage addresses</Text>
-                </View>
-                <Ionicons name='chevron-forward' size={20} color="#9CA3AF" />
-              </TouchableOpacity>
-
-              <TouchableOpacity className='flex-row items-center p-4 bg-gray-50 rounded-2xl active:bg-gray-100'>
-                <View className='w-10 h-10 bg-purple-100 rounded-xl items-center justify-center mr-4'>
-                  <Ionicons name='card' size={20} color="#8B5CF6" />
-                </View>
-                <View className='flex-1'>
-                  <Text className='text-gray-800 font-semibold'>Payment Methods</Text>
-                  <Text className='text-gray-500 text-sm'>Cards & wallets</Text>
-                </View>
-                <Ionicons name='chevron-forward' size={20} color="#9CA3AF" />
-              </TouchableOpacity>
+              {quickActions.map((item) => (
+                <TouchableOpacity 
+                  key={item.id}
+                  className='flex-row items-center p-4 bg-gray-50 rounded-2xl active:bg-gray-100'
+                  onPress={item.onPress}
+                >
+                  <View 
+                    className='w-10 h-10 rounded-xl items-center justify-center mr-4'
+                    style={{ backgroundColor: item.iconBg }}
+                  >
+                    <Ionicons name={item.icon} size={20} color={item.iconColor} />
+                  </View>
+                  <View className='flex-1'>
+                    <Text className='text-gray-800 font-semibold'>{item.title}</Text>
+                    <Text className='text-gray-500 text-sm'>{item.subtitle}</Text>
+                  </View>
+                  <Ionicons name='chevron-forward' size={20} color="#9CA3AF" />
+                </TouchableOpacity>
+              ))}
             </View>
           </View>
 
@@ -122,49 +216,25 @@ export default function ProfileScreen() {
             <Text className='text-xl font-bold text-gray-800 mb-4'>Account Settings</Text>
             
             <View className='space-y-3'>
-              <TouchableOpacity className='flex-row items-center p-4 bg-gray-50 rounded-2xl active:bg-gray-100'>
-                <View className='w-10 h-10 bg-purple-100 rounded-xl items-center justify-center mr-4'>
-                  <Ionicons name='person' size={20} color="#8B5CF6" />
-                </View>
-                <View className='flex-1'>
-                  <Text className='text-gray-800 font-semibold'>Personal Info</Text>
-                  <Text className='text-gray-500 text-sm'>Update your details</Text>
-                </View>
-                <Ionicons name='chevron-forward' size={20} color="#9CA3AF" />
-              </TouchableOpacity>
-
-              <TouchableOpacity className='flex-row items-center p-4 bg-gray-50 rounded-2xl active:bg-gray-100'>
-                <View className='w-10 h-10 bg-yellow-100 rounded-xl items-center justify-center mr-4'>
-                  <Ionicons name='shield-checkmark' size={20} color="#F59E0B" />
-                </View>
-                <View className='flex-1'>
-                  <Text className='text-gray-800 font-semibold'>Security</Text>
-                  <Text className='text-gray-500 text-sm'>Password & privacy</Text>
-                </View>
-                <Ionicons name='chevron-forward' size={20} color="#9CA3AF" />
-              </TouchableOpacity>
-
-              <TouchableOpacity className='flex-row items-center p-4 bg-gray-50 rounded-2xl active:bg-gray-100'>
-                <View className='w-10 h-10 bg-indigo-100 rounded-xl items-center justify-center mr-4'>
-                  <Ionicons name='notifications' size={20} color="#6366F1" />
-                </View>
-                <View className='flex-1'>
-                  <Text className='text-gray-800 font-semibold'>Notifications</Text>
-                  <Text className='text-gray-500 text-sm'>Manage alerts</Text>
-                </View>
-                <Ionicons name='chevron-forward' size={20} color="#9CA3AF" />
-              </TouchableOpacity>
-
-              <TouchableOpacity className='flex-row items-center p-4 bg-gray-50 rounded-2xl active:bg-gray-100'>
-                <View className='w-10 h-10 bg-pink-100 rounded-xl items-center justify-center mr-4'>
-                  <Ionicons name='language' size={20} color="#EC4899" />
-                </View>
-                <View className='flex-1'>
-                  <Text className='text-gray-800 font-semibold'>Language</Text>
-                  <Text className='text-gray-500 text-sm'>App language</Text>
-                </View>
-                <Ionicons name='chevron-forward' size={20} color="#9CA3AF" />
-              </TouchableOpacity>
+              {accountSettings.map((item) => (
+                <TouchableOpacity 
+                  key={item.id}
+                  className='flex-row items-center p-4 bg-gray-50 rounded-2xl active:bg-gray-100'
+                  onPress={item.onPress}
+                >
+                  <View 
+                    className='w-10 h-10 rounded-xl items-center justify-center mr-4'
+                    style={{ backgroundColor: item.iconBg }}
+                  >
+                    <Ionicons name={item.icon} size={20} color={item.iconColor} />
+                  </View>
+                  <View className='flex-1'>
+                    <Text className='text-gray-800 font-semibold'>{item.title}</Text>
+                    <Text className='text-gray-500 text-sm'>{item.subtitle}</Text>
+                  </View>
+                  <Ionicons name='chevron-forward' size={20} color="#9CA3AF" />
+                </TouchableOpacity>
+              ))}
             </View>
           </View>
 
@@ -173,38 +243,25 @@ export default function ProfileScreen() {
             <Text className='text-xl font-bold text-gray-800 mb-4'>Support</Text>
             
             <View className='space-y-3'>
-              <TouchableOpacity className='flex-row items-center p-4 bg-gray-50 rounded-2xl active:bg-gray-100'>
-                <View className='w-10 h-10 bg-blue-100 rounded-xl items-center justify-center mr-4'>
-                  <Ionicons name='help-circle' size={20} color="#3B82F6" />
-                </View>
-                <View className='flex-1'>
-                  <Text className='text-gray-800 font-semibold'>Help Center</Text>
-                  <Text className='text-gray-500 text-sm'>Get help & support</Text>
-                </View>
-                <Ionicons name='chevron-forward' size={20} color="#9CA3AF" />
-              </TouchableOpacity>
-
-              <TouchableOpacity className='flex-row items-center p-4 bg-gray-50 rounded-2xl active:bg-gray-100'>
-                <View className='w-10 h-10 bg-green-100 rounded-xl items-center justify-center mr-4'>
-                  <Ionicons name='chatbubble-ellipses' size={20} color="#10B981" />
-                </View>
-                <View className='flex-1'>
-                  <Text className='text-gray-800 font-semibold'>Contact Us</Text>
-                  <Text className='text-gray-500 text-sm'>24/7 customer care</Text>
-                </View>
-                <Ionicons name='chevron-forward' size={20} color="#9CA3AF" />
-              </TouchableOpacity>
-
-              <TouchableOpacity className='flex-row items-center p-4 bg-gray-50 rounded-2xl active:bg-gray-100'>
-                <View className='w-10 h-10 bg-orange-100 rounded-xl items-center justify-center mr-4'>
-                  <Ionicons name='document-text' size={20} color="#F97316" />
-                </View>
-                <View className='flex-1'>
-                  <Text className='text-gray-800 font-semibold'>Terms & Privacy</Text>
-                  <Text className='text-gray-500 text-sm'>Legal information</Text>
-                </View>
-                <Ionicons name='chevron-forward' size={20} color="#9CA3AF" />
-              </TouchableOpacity>
+              {supportItems.map((item) => (
+                <TouchableOpacity 
+                  key={item.id}
+                  className='flex-row items-center p-4 bg-gray-50 rounded-2xl active:bg-gray-100'
+                  onPress={item.onPress}
+                >
+                  <View 
+                    className='w-10 h-10 rounded-xl items-center justify-center mr-4'
+                    style={{ backgroundColor: item.iconBg }}
+                  >
+                    <Ionicons name={item.icon} size={20} color={item.iconColor} />
+                  </View>
+                  <View className='flex-1'>
+                    <Text className='text-gray-800 font-semibold'>{item.title}</Text>
+                    <Text className='text-gray-500 text-sm'>{item.subtitle}</Text>
+                  </View>
+                  <Ionicons name='chevron-forward' size={20} color="#9CA3AF" />
+                </TouchableOpacity>
+              ))}
             </View>
           </View>
 
