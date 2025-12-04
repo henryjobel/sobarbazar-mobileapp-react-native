@@ -50,7 +50,7 @@ const FlashSaleSection: React.FC<FlashSaleSectionProps> = ({
       originalPrice: originalPrice,
       discount: discount,
       image: item.image,
-      sold: Math.floor(Math.random() * 300) + 50,  // progress bar এর জন্য
+      sold: Math.floor(Math.random() * 300) + 50,  // this is for the [progessbar]
       total: Math.floor(Math.random() * 500) + 300,
     };
   }),
