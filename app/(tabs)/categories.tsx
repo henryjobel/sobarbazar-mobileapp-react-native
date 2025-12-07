@@ -1,4 +1,5 @@
 import { Categories } from '@/data/Categories';
+import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useEffect, useState } from 'react';
@@ -10,13 +11,13 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View
 } from 'react-native';
 
 const { width } = Dimensions.get('window');
 
-// Types
 type CategoryItem = {
   id: string | number;
   title: string;
@@ -32,15 +33,23 @@ type CategoriesNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 export default function CategoriesScreen() {
   const navigation = useNavigation<CategoriesNavigationProp>();
   const [isLoading, setIsLoading] = useState(true);
+  const [searchText, setSearchText] = useState('');
+  const [filteredCategories, setFilteredCategories] = useState(Categories);
 
   useEffect(() => {
-    // Simulate loading
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 500);
-    
+    const timer = setTimeout(() => setIsLoading(false), 500);
     return () => clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    if (searchText === '') setFilteredCategories(Categories);
+    else {
+      const filtered = Categories.filter(cat =>
+        cat.title.toLowerCase().includes(searchText.toLowerCase())
+      );
+      setFilteredCategories(filtered);
+    }
+  }, [searchText]);
 
   const handleCategoryPress = (category: CategoryItem) => {
     navigation.navigate('ProductScreen', {
@@ -52,7 +61,7 @@ export default function CategoriesScreen() {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007bff" />
+        <ActivityIndicator size="large" color="#007AFF" />
         <Text style={styles.loadingText}>Loading categories...</Text>
       </SafeAreaView>
     );
@@ -60,25 +69,41 @@ export default function CategoriesScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Header with Search & Filter */}
       <View style={styles.header}>
-        <Text style={styles.title}>All Categories</Text>
-        <Text style={styles.subtitle}>
-          Browse through all our product categories
-        </Text>
+        <Text style={styles.headerTitle}>All Categories</Text>
+        <Text style={styles.headerSubtitle}>Browse through all products</Text>
+
+        {/* Search & Filter Row */}
+        <View style={styles.searchRow}>
+          <View style={styles.searchBox}>
+            <Feather name="search" size={20} color="#888" style={{ marginRight: 8 }} />
+            <TextInput
+              placeholder="Search categories"
+              style={{ flex: 1 }}
+              value={searchText}
+              onChangeText={setSearchText}
+              placeholderTextColor="#888"
+            />
+          </View>
+          <TouchableOpacity style={styles.filterBtn}>
+            <Feather name="sliders" size={22} color="#007AFF" />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      <ScrollView 
-        style={styles.scrollView}
+      <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
+        {/* Categories Grid */}
         <View style={styles.categoriesGrid}>
-          {Categories.map((category) => (
+          {filteredCategories.length > 0 ? filteredCategories.map(category => (
             <TouchableOpacity
               key={category.id}
               style={styles.categoryCard}
               onPress={() => handleCategoryPress(category)}
-              activeOpacity={0.7}
+              activeOpacity={0.8}
             >
               <View style={styles.imageContainer}>
                 <Image
@@ -91,16 +116,9 @@ export default function CategoriesScreen() {
                 {category.title}
               </Text>
             </TouchableOpacity>
-          ))}
-        </View>
-
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>
-            Total Categories: {Categories.length}
-          </Text>
-          <Text style={styles.footerSubtext}>
-            Tap any category to view products
-          </Text>
+          )) : (
+            <Text style={{ color: '#888', textAlign: 'center', marginTop: 50 }}>No categories found</Text>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -108,107 +126,87 @@ export default function CategoriesScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
-  },
+  container: { flex: 1, backgroundColor: '#F4F6F8' },
+
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#F4F6F8',
   },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#6c757d',
-  },
+  loadingText: { marginTop: 12, fontSize: 16, color: '#6C757D' },
+
   header: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#fff',
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
+    borderBottomColor: '#E0E0E0',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 3,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#2c4341',
-    marginBottom: 5,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#6c757d',
-  },
-  scrollView: {
+  headerTitle: { fontSize: 28, fontWeight: '800', color: '#1C1C1C', marginBottom: 4 },
+  headerSubtitle: { fontSize: 14, color: '#7A7A7A', marginBottom: 12 },
+
+  searchRow: { flexDirection: 'row', alignItems: 'center' },
+  searchBox: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F0F0',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 30,
+  filterBtn: {
+    backgroundColor: '#E6F0FF',
+    marginLeft: 12,
+    padding: 10,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
+
+  scrollContent: { padding: 16, paddingBottom: 30 },
+
   categoriesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
   },
   categoryCard: {
-    width: (width - 40) / 2, // 2 columns with padding
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 15,
+    width: (width - 48) / 2,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    paddingVertical: 20,
+    paddingHorizontal: 12,
     marginBottom: 16,
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 5,
   },
   imageContainer: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#F0F0F0',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#e9ecef',
+    borderColor: '#E0E0E0',
   },
-  categoryImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-  },
+  categoryImage: { width: 50, height: 50, borderRadius: 25 },
   categoryTitle: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#2c4341',
+    fontWeight: '700',
+    color: '#1C1C1C',
     textAlign: 'center',
-    marginTop: 5,
     lineHeight: 18,
-  },
-  footer: {
-    backgroundColor: '#e3f2fd',
-    padding: 20,
-    borderRadius: 12,
-    marginTop: 20,
-    alignItems: 'center',
-  },
-  footerText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1976d2',
-    marginBottom: 5,
-  },
-  footerSubtext: {
-    fontSize: 14,
-    color: '#1976d2',
-    opacity: 0.8,
   },
 });
