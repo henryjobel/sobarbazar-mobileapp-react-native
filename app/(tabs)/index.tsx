@@ -2,6 +2,7 @@ import BigSaleBannerr from '@/components/home/banner'
 import Category from '@/components/home/Category'
 import FlashSaleSection from '@/components/home/FlashSaleSection'
 import Header from '@/components/home/header'
+import Product from '@/components/home/Products'
 import SubHeader from '@/components/home/SubHeader'
 import Vendors from '@/components/home/vendors'
 import React from 'react'
@@ -18,6 +19,7 @@ export default function index() {
         <BigSaleBannerr/>
         <Category></Category>
         <FlashSaleSection></FlashSaleSection>
+        <Product></Product>
         <Vendors></Vendors>
       </ScrollView>
     </SafeAreaView>

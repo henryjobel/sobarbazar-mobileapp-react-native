@@ -11,8 +11,8 @@
   "include": [
     "**/*.ts",
     "**/*.tsx",
-    ".expo/types/**/*.ts",
-    "expo-env.d.ts",
-    "nativewind-env.d.ts"
-, "utils/helper.js", "data/ProductData.js"  ]
+    "nativewind-env.d.ts",
+    "utils/helper.js",
+    "data/ProductData.js"
+  ]
 }
