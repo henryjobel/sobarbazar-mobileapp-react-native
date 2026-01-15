@@ -1,87 +1,107 @@
-import ProductData from '@/data/ProductData';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   Animated,
-  Image,
+  Dimensions,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
+import { useCart } from '../../context/CartContext';
 
+const { width } = Dimensions.get('window');
 
-interface FlashSaleProduct {
-  id: number | string;
-  title: string;
-  price: number;
-  originalPrice: number;
-  discount: number;
-  image: any;
-  sold: number;
-  total: number;
+interface Product {
+  id: number;
+  name?: string;
+  default_variant?: {
+    id: number;
+    name?: string;
+    price: number;
+    final_price: number;
+    discount?: {
+      name: string;
+      type: string;
+      value: number;
+      is_percentage: boolean;
+    };
+    stock?: number;
+    available_stock?: number;
+    image?: string;
+  };
+  images?: { image: string }[];
 }
 
 interface FlashSaleSectionProps {
-  title?: string;
-  subtitle?: string;
-  products?: FlashSaleProduct[];
-  onViewAll?: () => void;
-  onProductPress?: (product: FlashSaleProduct) => void;
+  products?: Product[];
+  allProducts?: Product[];
+  bannerSection?: {
+    title?: string;
+    banner_items?: {
+      id: number;
+      title: string;
+      start_date?: string;
+      end_date?: string;
+    }[];
+  };
 }
 
 const FlashSaleSection: React.FC<FlashSaleSectionProps> = ({
-  title = "Flash Sale ⚡",
-  subtitle = "Limited time offers! Don't miss out",
-
-  products = ProductData.map((item) => {
-    const price = parseInt(item.price.replace(/,/g, ''));
-
-    const originalPrice = parseInt(item.crossOutText.replace(/[^0-9]/g, ''));
-
-    const discount = Math.round(((originalPrice - price) / originalPrice) * 100);
-
-    return {
-      id: item.id,
-      title: item.productName,
-      price: price,
-      originalPrice: originalPrice,
-      discount: discount,
-      image: item.image,
-      sold: Math.floor(Math.random() * 300) + 50,  // this is for the [progessbar]
-      total: Math.floor(Math.random() * 500) + 300,
-    };
-  }),
-
-  onViewAll,
-  onProductPress,
+  products = [],
+  allProducts = [],
+  bannerSection,
 }) => {
-
-  const [timeLeft, setTimeLeft] = useState('06:45:22');
+  const router = useRouter();
+  const { addItem } = useCart();
+  const [timeLeft, setTimeLeft] = useState({ hours: 6, minutes: 45, seconds: 22 });
   const [progressAnim] = useState(new Animated.Value(0));
 
-  // countdown
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        const [h, m, s] = prev.split(':').map(Number);
-        let totalSeconds = h * 3600 + m * 60 + s - 1;
-        if (totalSeconds < 0) totalSeconds = 24 * 3600;
+  // Use products with discounts, or show first 10 products if no discounts
+  const displayProducts = products.length > 0 ? products : (allProducts || []).slice(0, 10);
 
-        return [
-          String(Math.floor(totalSeconds / 3600)).padStart(2, '0'),
-          String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0'),
-          String(totalSeconds % 60).padStart(2, '0'),
-        ].join(':');
-      });
+  // If no products to show, don't render the section
+  if (displayProducts.length === 0) {
+    return null;
+  }
+
+  // Get countdown end time from banner or use default 24 hours
+  useEffect(() => {
+    let endTime: Date;
+
+    if (bannerSection?.banner_items?.[0]?.end_date) {
+      endTime = new Date(bannerSection.banner_items[0].end_date);
+    } else {
+      // Default: 24 hours from now
+      endTime = new Date();
+      endTime.setHours(endTime.getHours() + 24);
+    }
+
+    const timer = setInterval(() => {
+      const now = new Date();
+      const diff = Math.max(0, endTime.getTime() - now.getTime());
+
+      if (diff <= 0) {
+        // Reset timer for another 24 hours
+        endTime = new Date();
+        endTime.setHours(endTime.getHours() + 24);
+      }
+
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+      setTimeLeft({ hours, minutes, seconds });
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [bannerSection]);
 
-  // bar animation
+  // Bar animation
   useEffect(() => {
     Animated.timing(progressAnim, {
       toValue: 1,
@@ -90,21 +110,62 @@ const FlashSaleSection: React.FC<FlashSaleSectionProps> = ({
     }).start();
   }, []);
 
-  const handleProductPress = (product: FlashSaleProduct) => {
-    onProductPress?.(product);
+  const handleProductPress = (product: Product) => {
+    router.push(`/screens/product/${product.id}`);
+  };
+
+  const handleAddToCart = (product: Product) => {
+    const variant = product.default_variant;
+    if (variant) {
+      addItem({
+        id: product.id,
+        name: product.name || 'Product',
+        price: variant.final_price || variant.price,
+        image: getProductImage(product),
+        quantity: 1,
+        variantId: variant.id,
+      });
+    }
   };
 
   const handleViewAll = () => {
-    onViewAll?.();
+    router.push('/screens/shop');
   };
 
-  const calcProgress = (sold: number, total: number) => {
-    return (sold / total) * 100;
+  const getProductImage = (product: Product) => {
+    if (product.default_variant?.image) {
+      return product.default_variant.image;
+    }
+    if (product.images && product.images.length > 0) {
+      return product.images[0].image;
+    }
+    return 'https://via.placeholder.com/200';
   };
+
+  const getDiscountPercent = (product: Product) => {
+    const variant = product.default_variant;
+    if (!variant) return 0;
+
+    if (variant.discount?.is_percentage) {
+      return Math.round(variant.discount.value);
+    }
+
+    if (variant.price && variant.final_price && variant.price > variant.final_price) {
+      return Math.round(((variant.price - variant.final_price) / variant.price) * 100);
+    }
+
+    return 0;
+  };
+
+  const getSoldProgress = () => {
+    // Calculate a random sold percentage for visual effect
+    return Math.floor(Math.random() * 60) + 30;
+  };
+
+  const formatTime = (value: number) => String(value).padStart(2, '0');
 
   return (
     <View style={styles.container}>
-
       <LinearGradient
         colors={['#FF6B6B', '#FF8E53']}
         start={{ x: 0, y: 0 }}
@@ -114,16 +175,18 @@ const FlashSaleSection: React.FC<FlashSaleSectionProps> = ({
         <View style={styles.headerContent}>
           <View style={styles.titleContainer}>
             <Ionicons name="flash" size={24} color="#FFF" />
-            <Text style={styles.title}>{title}</Text>
+            <Text style={styles.title}>Flash Sale</Text>
           </View>
 
           <View style={styles.timerContainer}>
             <Text style={styles.timerLabel}>Ends in</Text>
-            <Text style={styles.timerText}>{timeLeft}</Text>
+            <Text style={styles.timerText}>
+              {formatTime(timeLeft.hours)}:{formatTime(timeLeft.minutes)}:{formatTime(timeLeft.seconds)}
+            </Text>
           </View>
         </View>
 
-        <Text style={styles.subtitle}>{subtitle}</Text>
+        <Text style={styles.subtitle}>Limited time offers! Don't miss out</Text>
       </LinearGradient>
 
       <ScrollView
@@ -131,12 +194,14 @@ const FlashSaleSection: React.FC<FlashSaleSectionProps> = ({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.productsContainer}
       >
-        {products.map((product) => {
-          const progress = calcProgress(product.sold, product.total);
+        {displayProducts.map((product) => {
+          const variant = product.default_variant;
+          const discountPercent = getDiscountPercent(product);
+          const soldPercent = getSoldProgress();
 
           const widthAnim = progressAnim.interpolate({
             inputRange: [0, 1],
-            outputRange: ["0%", `${progress}%`],
+            outputRange: ['0%', `${soldPercent}%`],
           });
 
           return (
@@ -147,19 +212,33 @@ const FlashSaleSection: React.FC<FlashSaleSectionProps> = ({
               activeOpacity={0.85}
             >
               <View style={styles.imageContainer}>
-                <Image source={product.image} style={styles.productImage} />
+                <Image
+                  source={{ uri: getProductImage(product) }}
+                  style={styles.productImage}
+                  contentFit="cover"
+                />
 
-                <View style={styles.discountBadge}>
-                  <Text style={styles.discountText}>{product.discount}% OFF</Text>
-                </View>
+                {discountPercent > 0 && (
+                  <View style={styles.discountBadge}>
+                    <Text style={styles.discountText}>{discountPercent}% OFF</Text>
+                  </View>
+                )}
               </View>
 
               <View style={styles.productInfo}>
-                <Text style={styles.productTitle} numberOfLines={2}>{product.title}</Text>
+                <Text style={styles.productTitle} numberOfLines={2}>
+                  {product.name || 'Product'}
+                </Text>
 
                 <View style={styles.priceContainer}>
-                  <Text style={styles.currentPrice}>₹{product.price}</Text>
-                  <Text style={styles.originalPrice}>₹{product.originalPrice}</Text>
+                  <Text style={styles.currentPrice}>
+                    ৳{(variant?.final_price || variant?.price || 0).toLocaleString()}
+                  </Text>
+                  {variant?.price && variant?.final_price && variant.price > variant.final_price && (
+                    <Text style={styles.originalPrice}>
+                      ৳{variant.price.toLocaleString()}
+                    </Text>
+                  )}
                 </View>
 
                 <View style={styles.progressContainer}>
@@ -168,16 +247,20 @@ const FlashSaleSection: React.FC<FlashSaleSectionProps> = ({
                   </View>
 
                   <View style={styles.progressStats}>
-                    <Text style={styles.soldText}>{product.sold} sold</Text>
-                    <Text style={styles.remainingText}>{product.total - product.sold} left</Text>
+                    <Text style={styles.soldText}>{soldPercent}% sold</Text>
+                    <Text style={styles.remainingText}>
+                      {variant?.available_stock || variant?.stock || 'Limited'} left
+                    </Text>
                   </View>
                 </View>
 
-                <TouchableOpacity style={styles.buyNowButton}>
+                <TouchableOpacity
+                  style={styles.buyNowButton}
+                  onPress={() => handleAddToCart(product)}
+                >
                   <Ionicons name="flash" size={16} color="#FFF" />
                   <Text style={styles.buyNowText}>Buy Now</Text>
                 </TouchableOpacity>
-
               </View>
             </TouchableOpacity>
           );
@@ -195,12 +278,9 @@ const FlashSaleSection: React.FC<FlashSaleSectionProps> = ({
           <Ionicons name="arrow-forward" size={18} color="#FFF" />
         </LinearGradient>
       </TouchableOpacity>
-
     </View>
   );
 };
-
-
 
 const styles = StyleSheet.create({
   container: {
@@ -210,6 +290,10 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: 'hidden',
     elevation: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
   },
 
   header: {
@@ -271,15 +355,19 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginRight: 16,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
   },
 
   imageContainer: {
     height: 140,
+    position: 'relative',
   },
 
   productImage: {
     width: '100%',
     height: '100%',
+    backgroundColor: '#F5F5F5',
   },
 
   discountBadge: {
@@ -295,16 +383,19 @@ const styles = StyleSheet.create({
   discountText: {
     color: '#FFF',
     fontWeight: '800',
+    fontSize: 11,
   },
 
   productInfo: {
-    padding: 16,
+    padding: 12,
   },
 
   productTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-    height: 40,
+    height: 36,
+    lineHeight: 18,
+    color: '#333',
   },
 
   priceContainer: {
@@ -314,14 +405,14 @@ const styles = StyleSheet.create({
   },
 
   currentPrice: {
-    fontSize: 18,
+    fontSize: 16,
     color: '#FF6B6B',
     fontWeight: '700',
     marginRight: 8,
   },
 
   originalPrice: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#999',
     textDecorationLine: 'line-through',
   },
@@ -334,11 +425,13 @@ const styles = StyleSheet.create({
     height: 6,
     backgroundColor: '#EEE',
     borderRadius: 3,
+    overflow: 'hidden',
   },
 
   progressFill: {
     height: '100%',
     backgroundColor: '#4CD964',
+    borderRadius: 3,
   },
 
   progressStats: {
@@ -348,12 +441,12 @@ const styles = StyleSheet.create({
   },
 
   soldText: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#666',
   },
 
   remainingText: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#FF6B6B',
     fontWeight: '600',
   },
@@ -371,6 +464,7 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontWeight: '700',
     marginLeft: 6,
+    fontSize: 13,
   },
 
   viewAllButton: {
@@ -389,6 +483,7 @@ const styles = StyleSheet.create({
   viewAllText: {
     color: '#FFF',
     fontSize: 15,
+    fontWeight: '600',
     marginRight: 8,
   },
 });

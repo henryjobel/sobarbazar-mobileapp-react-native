@@ -175,21 +175,28 @@ export async function getProducts(page = 1, limit = 20, category = null, search 
 
 export async function getProductById(id) {
   const url = `${BASE_URL}/api/v1.0/customers/products/${id}/`;
-  
+
   console.log("🔍 Product Detail URL:", url);
-  
+
   try {
     const res = await fetch(url);
-    
+
     console.log("📊 Product Detail Status:", res.status);
-    
+
     if (!res.ok) {
       throw new Error('Product not found');
     }
-    
-    const data = await parseResponse(res);
-    console.log("✅ Product Detail Response:", data ? 'Received' : 'No data');
-    return data;
+
+    const json = await parseResponse(res);
+    console.log("✅ Product Detail Response:", json ? 'Received' : 'No data');
+
+    // Handle response structure - could be {success, data} or direct object
+    if (json && json.success && json.data) {
+      return json.data;
+    } else if (json && json.data) {
+      return json.data;
+    }
+    return json;
   } catch (err) {
     console.log("❌ Product Detail Error:", err.message);
     return null;
@@ -530,18 +537,18 @@ export async function removeFromFavorites(favoriteId, token) {
 // ==================== HOME & BASE APIs ====================
 export async function getHomePageData() {
   const url = `${BASE_URL}/api/v1.0/base/home-page-data/`;
-  
+
   console.log("🏠 Home Page URL:", url);
-  
+
   try {
     const res = await fetch(url);
-    
+
     console.log("📊 Home Page Status:", res.status);
-    
+
     if (!res.ok) {
       throw new Error('Failed to fetch home page data');
     }
-    
+
     const data = await parseResponse(res);
     console.log("✅ Home Page Response:", data ? 'Received' : 'No data');
     return data;
@@ -549,6 +556,146 @@ export async function getHomePageData() {
     console.log("❌ Home Page Error:", err.message);
     return null;
   }
+}
+
+export async function getNavbarData() {
+  const url = `${BASE_URL}/api/v1.0/base/navbar-data/`;
+
+  console.log("📋 Navbar URL:", url);
+
+  try {
+    const res = await fetch(url);
+
+    console.log("📊 Navbar Status:", res.status);
+
+    if (!res.ok) {
+      throw new Error('Failed to fetch navbar data');
+    }
+
+    const data = await parseResponse(res);
+    console.log("✅ Navbar Response:", data ? 'Received' : 'No data');
+    return data;
+  } catch (err) {
+    console.log("❌ Navbar Error:", err.message);
+    return null;
+  }
+}
+
+// ==================== PRODUCT REVIEWS APIs ====================
+export async function getProductReviews(productId) {
+  const url = `${BASE_URL}/api/v1.0/customers/products/${productId}/reviews/`;
+
+  console.log("⭐ Product Reviews URL:", url);
+
+  try {
+    const res = await fetch(url);
+
+    console.log("📊 Reviews Status:", res.status);
+
+    if (!res.ok) {
+      throw new Error('Failed to fetch reviews');
+    }
+
+    const json = await parseResponse(res);
+
+    if (json && json.data) {
+      console.log(`✅ Found ${json.data.length} reviews in 'data'`);
+      return json.data;
+    } else if (Array.isArray(json)) {
+      console.log(`✅ Found ${json.length} reviews in array`);
+      return json;
+    } else {
+      console.log("⚠️ No reviews found");
+      return [];
+    }
+  } catch (err) {
+    console.log("❌ Reviews Error:", err.message);
+    return [];
+  }
+}
+
+export async function createProductReview(productId, reviewData, token) {
+  const url = `${BASE_URL}/api/v1.0/customers/products/${productId}/reviews/`;
+
+  console.log("✍️ Create Review URL:", url);
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: getHeaders(token),
+      body: JSON.stringify(reviewData),
+    });
+
+    console.log("📊 Create Review Status:", res.status);
+
+    const data = await parseResponse(res);
+    console.log("✅ Create Review Response:", data);
+    return data;
+  } catch (err) {
+    console.log("❌ Create Review Error:", err.message);
+    return null;
+  }
+}
+
+// ==================== FLASH DEALS / DISCOUNTED PRODUCTS ====================
+export async function getFlashDeals() {
+  // Products with discounts - we can filter for products that have discount
+  const url = `${BASE_URL}/api/v1.0/customers/products/?pagination=1&page=1&page_size=20`;
+
+  console.log("⚡ Flash Deals URL:", url);
+
+  try {
+    const res = await fetch(url);
+
+    console.log("📊 Flash Deals Status:", res.status);
+
+    if (!res.ok) {
+      throw new Error('Failed to fetch flash deals');
+    }
+
+    const json = await parseResponse(res);
+
+    let products = [];
+    if (json && json.data && json.data.results) {
+      products = json.data.results;
+    } else if (json && json.data) {
+      products = json.data;
+    } else if (json && json.results) {
+      products = json.results;
+    } else if (Array.isArray(json)) {
+      products = json;
+    }
+
+    // Filter products with discounts
+    const flashDeals = products.filter(product => {
+      const variant = product.default_variant;
+      if (variant && variant.discount) {
+        return true;
+      }
+      // Check if sale price is less than original price
+      if (variant && variant.final_price && variant.price && variant.final_price < variant.price) {
+        return true;
+      }
+      return false;
+    });
+
+    console.log(`✅ Found ${flashDeals.length} flash deals`);
+    return flashDeals;
+  } catch (err) {
+    console.log("❌ Flash Deals Error:", err.message);
+    return [];
+  }
+}
+
+// ==================== DELIVERY CHARGES ====================
+export async function getDeliveryCharges() {
+  // This would typically come from an API endpoint
+  // Based on backend, delivery charges are stored in DeliveryCharge model
+  // For now, return static values that match the backend
+  return {
+    inside_dhaka: 60,
+    outside_dhaka: 120,
+  };
 }
 
 export async function getDashboardData() {
@@ -621,9 +768,16 @@ export async function getStoreById(storeId) {
       throw new Error('Store not found');
     }
 
-    const data = await parseResponse(res);
-    console.log("✅ Store Detail Response:", data ? 'Received' : 'No data');
-    return data;
+    const json = await parseResponse(res);
+    console.log("✅ Store Detail Response:", json ? 'Received' : 'No data');
+
+    // Handle response structure
+    if (json && json.success && json.data) {
+      return json.data;
+    } else if (json && json.data) {
+      return json.data;
+    }
+    return json;
   } catch (err) {
     console.log("❌ Store Detail Error:", err.message);
     return null;
@@ -818,14 +972,25 @@ export default {
   
   // Home & Base
   getHomePageData,
+  getNavbarData,
   getDashboardData,
-  
+
   // Store
   getStores,
   getStoreById,
   getStoreProducts,
   getBrands,
-  
+
+  // Reviews
+  getProductReviews,
+  createProductReview,
+
+  // Flash Deals
+  getFlashDeals,
+
+  // Delivery
+  getDeliveryCharges,
+
   // Payment
   getPaymentMethods,
 };
