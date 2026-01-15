@@ -577,20 +577,20 @@ export async function getDashboardData() {
 // ==================== STORE APIs ====================
 export async function getStores() {
   const url = `${BASE_URL}/api/v1.0/customers/products/stores_list/`;
-  
+
   console.log("🏪 Stores URL:", url);
-  
+
   try {
     const res = await fetch(url);
-    
+
     console.log("📊 Stores Status:", res.status);
-    
+
     if (!res.ok) {
       throw new Error('Failed to fetch stores');
     }
-    
+
     const json = await parseResponse(res);
-    
+
     if (json && json.data) {
       console.log(`✅ Found ${json.data.length} stores in 'data'`);
       return json.data;
@@ -603,6 +603,64 @@ export async function getStores() {
     }
   } catch (err) {
     console.log("❌ Stores Error:", err.message);
+    return [];
+  }
+}
+
+export async function getStoreById(storeId) {
+  const url = `${BASE_URL}/api/v1.0/customers/products/stores_list/${storeId}/`;
+
+  console.log("🏪 Store Detail URL:", url);
+
+  try {
+    const res = await fetch(url);
+
+    console.log("📊 Store Detail Status:", res.status);
+
+    if (!res.ok) {
+      throw new Error('Store not found');
+    }
+
+    const data = await parseResponse(res);
+    console.log("✅ Store Detail Response:", data ? 'Received' : 'No data');
+    return data;
+  } catch (err) {
+    console.log("❌ Store Detail Error:", err.message);
+    return null;
+  }
+}
+
+export async function getStoreProducts(storeId, page = 1, limit = 20) {
+  const url = `${BASE_URL}/api/v1.0/customers/products/?store=${storeId}&pagination=1&page=${page}&page_size=${limit}`;
+
+  console.log("🛍️ Store Products URL:", url);
+
+  try {
+    const res = await fetch(url);
+
+    console.log("📊 Store Products Status:", res.status);
+
+    if (!res.ok) {
+      throw new Error('Failed to fetch store products');
+    }
+
+    const json = await parseResponse(res);
+
+    if (json && json.data) {
+      console.log(`✅ Found ${json.data.length} store products in 'data'`);
+      return json.data;
+    } else if (json && json.results) {
+      console.log(`✅ Found ${json.results.length} store products in 'results'`);
+      return json.results;
+    } else if (Array.isArray(json)) {
+      console.log(`✅ Found ${json.length} store products in array`);
+      return json;
+    } else {
+      console.log("⚠️ No store products found");
+      return [];
+    }
+  } catch (err) {
+    console.log("❌ Store Products Error:", err.message);
     return [];
   }
 }
@@ -764,6 +822,8 @@ export default {
   
   // Store
   getStores,
+  getStoreById,
+  getStoreProducts,
   getBrands,
   
   // Payment

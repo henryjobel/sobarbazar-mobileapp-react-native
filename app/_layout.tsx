@@ -165,6 +165,20 @@ export default function RootLayout() {
             }}
           />
 
+          {/* Stores Screens */}
+          <Stack.Screen
+            name="screens/stores/index"
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="screens/store/[id]"
+            options={{
+              headerShown: false,
+            }}
+          />
+
           {/* Search Screen */}
           <Stack.Screen
             name="screens/search/index"
