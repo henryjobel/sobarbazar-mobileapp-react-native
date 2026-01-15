@@ -23,7 +23,7 @@ export const getRating = rating => {
 };
 
 export const getProductFromApi = setProduct => {
-  return fetch('http://192.168.1.2:5000/products')
+  return fetch('https://api.hetdcl.com/products')
     .then(response => response.json())
     .then(json => {
       setProduct(json.data);
@@ -34,11 +34,11 @@ export const getProductFromApi = setProduct => {
 };
 
 export const getImgUrl = image => {
-  return `http://192.168.1.2:5000/${image}`;
+  return `https://api.hetdcl.com/${image}`;
 };
 
 export const getCategoryFromApi = setCategory => {
-  return fetch('http://192.168.1.2:5000/categories')
+  return fetch('https://api.hetdcl.com/categories')
     .then(response => response.json())
     .then(json => {
       setCategory(json.data);

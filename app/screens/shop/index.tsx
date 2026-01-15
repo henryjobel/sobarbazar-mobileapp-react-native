@@ -19,27 +19,44 @@ import { useCart, useWishlist } from '../../../context';
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48) / 2;
 
+interface ProductVariant {
+  id: number;
+  name: string;
+  price: number;
+  final_price: number;
+  stock: number;
+  available_stock?: number;
+  image?: string;
+  discount?: {
+    name: string;
+    type: string;
+    value: number;
+    is_percentage: boolean;
+  };
+}
+
 interface Product {
   id: number;
   name: string;
-  slug: string;
-  price: number;
-  sale_price?: number;
-  image: string;
+  slug?: string;
+  default_variant?: ProductVariant;
+  variants?: ProductVariant[];
+  images?: { id: number; image: string }[];
   category?: { id: number; name: string };
+  store?: { id: number; name: string };
   rating?: number;
 }
 
 interface Category {
   id: number;
   name: string;
-  slug: string;
+  slug?: string;
   image?: string;
 }
 
 export default function ShopScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ category?: string }>();
+  const params = useLocalSearchParams<{ category?: string; categoryId?: string; categoryName?: string }>();
   const { addItem } = useCart();
   const { isInWishlist, toggleWishlist } = useWishlist();
 
@@ -50,8 +67,13 @@ export default function ShopScreen() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  // Handle both 'category' and 'categoryId' params
   const [selectedCategory, setSelectedCategory] = useState<number | null>(
-    params.category ? parseInt(params.category) : null
+    params.categoryId ? parseInt(params.categoryId as string) :
+    params.category ? parseInt(params.category as string) : null
+  );
+  const [categoryTitle, setCategoryTitle] = useState<string>(
+    params.categoryName as string || 'Shop'
   );
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
@@ -118,8 +140,56 @@ export default function ShopScreen() {
     return `৳${price.toLocaleString()}`;
   };
 
+  // Helper functions for product data
+  const getProductPrice = (product: Product): number => {
+    return product.default_variant?.final_price || product.default_variant?.price || 0;
+  };
+
+  const getProductOriginalPrice = (product: Product): number => {
+    return product.default_variant?.price || 0;
+  };
+
+  const hasDiscount = (product: Product): boolean => {
+    const variant = product.default_variant;
+    if (!variant) return false;
+    return !!(variant.discount || (variant.price > variant.final_price));
+  };
+
+  const getDiscountPercent = (product: Product): number => {
+    const variant = product.default_variant;
+    if (!variant) return 0;
+    if (variant.discount?.is_percentage) return variant.discount.value;
+    if (variant.price > variant.final_price) {
+      return Math.round(((variant.price - variant.final_price) / variant.price) * 100);
+    }
+    return 0;
+  };
+
+  const getProductImage = (product: Product): string => {
+    // Try default_variant image first
+    if (product.default_variant?.image) return product.default_variant.image;
+    // Try images array
+    if (product.images && product.images.length > 0) {
+      const img = product.images[0];
+      if (typeof img === 'string') return img;
+      if (img?.image) return img.image;
+    }
+    // Try first variant
+    if (product.variants && product.variants.length > 0 && product.variants[0]?.image) {
+      return product.variants[0].image;
+    }
+    return 'https://via.placeholder.com/150';
+  };
+
   const handleAddToCart = async (product: Product) => {
-    await addItem(product, 1);
+    // Transform product to match cart item format
+    const cartItem = {
+      id: product.id,
+      name: product.name,
+      price: getProductPrice(product),
+      image: getProductImage(product),
+    };
+    await addItem(cartItem, 1);
   };
 
   const renderCategoryItem = ({ item }: { item: Category }) => (
@@ -143,10 +213,11 @@ export default function ShopScreen() {
 
   const renderProductCard = ({ item }: { item: Product }) => {
     const isWishlisted = isInWishlist(item.id);
-    const hasDiscount = item.sale_price && item.sale_price < item.price;
-    const discountPercent = hasDiscount
-      ? Math.round(((item.price - (item.sale_price || 0)) / item.price) * 100)
-      : 0;
+    const productHasDiscount = hasDiscount(item);
+    const discountPercent = getDiscountPercent(item);
+    const price = getProductPrice(item);
+    const originalPrice = getProductOriginalPrice(item);
+    const imageUrl = getProductImage(item);
 
     if (viewMode === 'list') {
       return (
@@ -156,7 +227,7 @@ export default function ShopScreen() {
           activeOpacity={0.7}
         >
           <Image
-            source={{ uri: item.image || 'https://via.placeholder.com/100' }}
+            source={{ uri: imageUrl }}
             style={styles.listImage}
             contentFit="cover"
           />
@@ -166,20 +237,20 @@ export default function ShopScreen() {
             </Text>
             <View style={styles.listPriceRow}>
               <Text style={styles.listPrice}>
-                {formatPrice(item.sale_price || item.price)}
+                {formatPrice(price)}
               </Text>
-              {hasDiscount && (
+              {productHasDiscount && originalPrice > price && (
                 <Text style={styles.listOriginalPrice}>
-                  {formatPrice(item.price)}
+                  {formatPrice(originalPrice)}
                 </Text>
               )}
             </View>
-            {item.rating && (
+            {item.rating ? (
               <View style={styles.listRating}>
                 <Ionicons name="star" size={12} color="#F59E0B" />
                 <Text style={styles.listRatingText}>{item.rating.toFixed(1)}</Text>
               </View>
-            )}
+            ) : null}
           </View>
           <View style={styles.listActions}>
             <TouchableOpacity
@@ -211,11 +282,11 @@ export default function ShopScreen() {
       >
         <View style={styles.imageContainer}>
           <Image
-            source={{ uri: item.image || 'https://via.placeholder.com/150' }}
+            source={{ uri: imageUrl }}
             style={styles.productImage}
             contentFit="cover"
           />
-          {hasDiscount && (
+          {productHasDiscount && discountPercent > 0 && (
             <View style={styles.discountBadge}>
               <Text style={styles.discountText}>-{discountPercent}%</Text>
             </View>
@@ -239,21 +310,21 @@ export default function ShopScreen() {
 
           <View style={styles.priceRow}>
             <Text style={styles.currentPrice}>
-              {formatPrice(item.sale_price || item.price)}
+              {formatPrice(price)}
             </Text>
-            {hasDiscount && (
+            {productHasDiscount && originalPrice > price && (
               <Text style={styles.originalPrice}>
-                {formatPrice(item.price)}
+                {formatPrice(originalPrice)}
               </Text>
             )}
           </View>
 
-          {item.rating && (
+          {item.rating ? (
             <View style={styles.ratingRow}>
               <Ionicons name="star" size={12} color="#F59E0B" />
               <Text style={styles.ratingText}>{item.rating.toFixed(1)}</Text>
             </View>
-          )}
+          ) : null}
         </View>
 
         <TouchableOpacity
@@ -297,7 +368,7 @@ export default function ShopScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color="#1F2937" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Shop</Text>
+        <Text style={styles.headerTitle}>{categoryTitle}</Text>
         <View style={styles.headerActions}>
           <TouchableOpacity
             style={styles.searchButton}

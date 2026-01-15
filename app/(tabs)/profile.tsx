@@ -2,8 +2,9 @@ import { Ionicons } from '@expo/vector-icons'
 import { router, useRouter } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import React from 'react'
-import { Image, ScrollView, Text, TouchableOpacity, View } from 'react-native'
+import { Image, ScrollView, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useAuth } from '@/context/AuthContext'
 
 // Menu Items Array
 const menuItems = [
@@ -117,20 +118,93 @@ const menuItems = [
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { user, isAuthenticated, isLoading, logout } = useAuth();
 
   // Filter items by section
   const quickActions = menuItems.filter(item => item.section === "quick");
   const accountSettings = menuItems.filter(item => item.section === "account");
   const supportItems = menuItems.filter(item => item.section === "support");
 
+  // Handle logout
+  const handleLogout = async () => {
+    await logout();
+    router.replace('/(routes)/login');
+  };
+
+  // Handle login navigation
+  const handleLogin = () => {
+    router.push('/(routes)/login');
+  };
+
+  // Get user display name
+  const getUserName = () => {
+    if (user?.first_name && user?.last_name) {
+      return `${user.first_name} ${user.last_name}`;
+    }
+    if (user?.name) return user.name;
+    if (user?.username) return user.username;
+    return 'User';
+  };
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <SafeAreaView className='flex-1 bg-gray-50 items-center justify-center'>
+        <ActivityIndicator size="large" color="#22C55E" />
+        <Text className='text-gray-600 mt-4'>Loading...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  // Show login prompt if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <SafeAreaView className='flex-1 bg-gray-50'>
+        <StatusBar barStyle="dark-content" backgroundColor="#ffffff"/>
+
+        {/* Header */}
+        <View className='bg-white px-6 py-4 border-b border-gray-100 shadow-sm'>
+          <Text className='text-3xl font-bold text-gray-800'>Profile</Text>
+          <Text className='text-base text-gray-600 mt-1'>Sign in to access your account</Text>
+        </View>
+
+        <View className='flex-1 items-center justify-center px-6'>
+          <View className='w-24 h-24 bg-gray-200 rounded-full items-center justify-center mb-6'>
+            <Ionicons name='person' size={48} color="#9CA3AF" />
+          </View>
+          <Text className='text-2xl font-bold text-gray-800 mb-2'>Welcome to Sobarbazar</Text>
+          <Text className='text-gray-500 text-center mb-8'>
+            Sign in to track orders, save favorites, and manage your account
+          </Text>
+
+          <TouchableOpacity
+            className='bg-green-500 rounded-2xl py-4 px-12 shadow-lg shadow-green-200 w-full'
+            onPress={handleLogin}
+          >
+            <Text className='text-white text-center text-lg font-semibold'>Sign In</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            className='mt-4'
+            onPress={() => router.push('/(routes)/signup')}
+          >
+            <Text className='text-gray-600'>
+              Don't have an account? <Text className='text-green-600 font-semibold'>Sign Up</Text>
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView className='flex-1 bg-gray-50'>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff"/>
-      
+
       {/* Header */}
       <View className='bg-white px-6 py-4 border-b border-gray-100 shadow-sm'>
         <Text className='text-3xl font-bold text-gray-800'>Profile</Text>
-        <Text className='text-base text-gray-600 mt-1'>Welcome back, John! 👋</Text>
+        <Text className='text-base text-gray-600 mt-1'>Welcome back, {getUserName()}!</Text>
       </View>
 
       <ScrollView className='flex-1' showsVerticalScrollIndicator={false}>
@@ -140,26 +214,30 @@ export default function ProfileScreen() {
             {/* Profile Header */}
             <View className='flex-row items-center mb-6'>
               <View className='relative'>
-                <Image 
-                  source={{ 
-                    uri: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2340&q=80' 
-                  }}
-                  className="w-24 h-24 rounded-full border-4 border-white shadow-lg"
-                  resizeMode='cover'
-                />
+                {user?.avatar ? (
+                  <Image
+                    source={{ uri: user.avatar }}
+                    className="w-24 h-24 rounded-full border-4 border-white shadow-lg"
+                    resizeMode='cover'
+                  />
+                ) : (
+                  <View className='w-24 h-24 rounded-full border-4 border-white shadow-lg bg-green-100 items-center justify-center'>
+                    <Text className='text-green-600 text-3xl font-bold'>
+                      {getUserName().charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
                 <TouchableOpacity className='absolute bottom-1 right-1 w-8 h-8 bg-green-500 rounded-full items-center justify-center border-2 border-white shadow-lg'>
                   <Ionicons name='camera' size={14} color="#fff" />
                 </TouchableOpacity>
               </View>
-              
+
               <View className='ml-5 flex-1'>
-                <Text className='text-2xl font-bold text-gray-800'>John Doe</Text>
-                <Text className='text-gray-500 text-base mt-1'>john.doe@example.com</Text>
-                <View className='flex-row items-center mt-2'>
-                  <View className='bg-yellow-100 px-3 py-1 rounded-full'>
-                    <Text className='text-yellow-800 text-sm font-medium'>⭐ Premium Member</Text>
-                  </View>
-                </View>
+                <Text className='text-2xl font-bold text-gray-800'>{getUserName()}</Text>
+                <Text className='text-gray-500 text-base mt-1'>{user?.email || ''}</Text>
+                {user?.phone ? (
+                  <Text className='text-gray-500 text-sm mt-1'>{user.phone}</Text>
+                ) : null}
               </View>
             </View>
 
@@ -286,7 +364,10 @@ export default function ProfileScreen() {
           </View>
 
           {/* Logout Button */}
-          <TouchableOpacity className='mt-4 mb-10 bg-red-500 rounded-2xl py-4 shadow-lg shadow-red-200 active:bg-red-600'>
+          <TouchableOpacity
+            className='mt-4 mb-10 bg-red-500 rounded-2xl py-4 shadow-lg shadow-red-200 active:bg-red-600'
+            onPress={handleLogout}
+          >
             <Text className='text-white text-center text-lg font-semibold'>Logout</Text>
           </TouchableOpacity>
         </View>

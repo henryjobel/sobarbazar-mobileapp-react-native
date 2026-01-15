@@ -112,15 +112,17 @@ export default function SignupScreen() {
     });
 
     if (result.success) {
-      // Navigate to OTP verification or directly to tabs if auto-logged in
-      router.push({
-        pathname: '/(routes)/otp',
-        params: {
-          email: formData.email,
-          phone: formData.phone,
-          fullName: formData.fullName,
-        },
-      });
+      // Show success message and navigate to home
+      Alert.alert(
+        'Welcome to Sobarbazar!',
+        'Your account has been created successfully.',
+        [
+          {
+            text: 'Start Shopping',
+            onPress: () => router.replace('/(tabs)'),
+          },
+        ]
+      );
     } else {
       Alert.alert('Registration Failed', result.error || 'Please try again.');
     }

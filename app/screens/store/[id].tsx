@@ -39,13 +39,28 @@ interface Store {
   established_date?: string;
 }
 
-interface Product {
+interface ProductVariant {
   id: number;
   name: string;
   price: number;
-  sale_price?: number;
+  final_price: number;
+  stock: number;
+  available_stock?: number;
   image?: string;
-  images?: { image: string }[];
+  discount?: {
+    name: string;
+    type: string;
+    value: number;
+    is_percentage: boolean;
+  };
+}
+
+interface Product {
+  id: number;
+  name: string;
+  default_variant?: ProductVariant;
+  variants?: ProductVariant[];
+  images?: { id: number; image: string }[];
   rating?: number;
   total_reviews?: number;
   store?: {
@@ -119,12 +134,53 @@ export default function StoreDetailScreen() {
     }
   };
 
+  // Helper functions for product data
+  const getProductPrice = (product: Product): number => {
+    return product.default_variant?.final_price || product.default_variant?.price || 0;
+  };
+
+  const getProductOriginalPrice = (product: Product): number => {
+    return product.default_variant?.price || 0;
+  };
+
+  const hasDiscount = (product: Product): boolean => {
+    const variant = product.default_variant;
+    if (!variant) return false;
+    return !!(variant.discount || (variant.price > variant.final_price));
+  };
+
+  const getDiscountPercent = (product: Product): number => {
+    const variant = product.default_variant;
+    if (!variant) return 0;
+    if (variant.discount?.is_percentage) return variant.discount.value;
+    if (variant.price > variant.final_price) {
+      return Math.round(((variant.price - variant.final_price) / variant.price) * 100);
+    }
+    return 0;
+  };
+
+  const getProductImage = (product: Product): string => {
+    // Try default_variant image first
+    if (product.default_variant?.image) return product.default_variant.image;
+    // Try images array
+    if (product.images && product.images.length > 0) {
+      const img = product.images[0];
+      if (typeof img === 'string') return img;
+      if (img?.image) return img.image;
+    }
+    // Try first variant
+    if (product.variants && product.variants.length > 0 && product.variants[0]?.image) {
+      return product.variants[0].image;
+    }
+    return 'https://via.placeholder.com/200';
+  };
+
   const handleAddToCart = (product: Product) => {
     addItem({
       id: product.id,
       name: product.name,
-      price: product.sale_price || product.price,
-      image: product.image || product.images?.[0]?.image,
+      price: getProductPrice(product),
+      image: getProductImage(product),
       quantity: 1,
     });
   };
@@ -136,24 +192,19 @@ export default function StoreDetailScreen() {
       addToWishlist({
         id: product.id,
         name: product.name,
-        price: product.sale_price || product.price,
-        image: product.image || product.images?.[0]?.image,
+        price: getProductPrice(product),
+        image: getProductImage(product),
       });
     }
   };
 
-  const getProductImage = (product: Product) => {
-    if (product.image) return product.image;
-    if (product.images && product.images.length > 0) return product.images[0].image;
-    return 'https://via.placeholder.com/200';
-  };
-
   const renderProductCard = ({ item }: { item: Product }) => {
     const isWishlisted = isInWishlist(item.id);
-    const hasDiscount = item.sale_price && item.sale_price < item.price;
-    const discountPercent = hasDiscount
-      ? Math.round(((item.price - item.sale_price!) / item.price) * 100)
-      : 0;
+    const productHasDiscount = hasDiscount(item);
+    const discountPercent = getDiscountPercent(item);
+    const price = getProductPrice(item);
+    const originalPrice = getProductOriginalPrice(item);
+    const imageUrl = getProductImage(item);
 
     return (
       <TouchableOpacity
@@ -163,11 +214,11 @@ export default function StoreDetailScreen() {
       >
         <View style={styles.productImageContainer}>
           <Image
-            source={{ uri: getProductImage(item) }}
+            source={{ uri: imageUrl }}
             style={styles.productImage}
             contentFit="cover"
           />
-          {hasDiscount && (
+          {productHasDiscount && discountPercent > 0 && (
             <View style={styles.discountBadge}>
               <Text style={styles.discountText}>-{discountPercent}%</Text>
             </View>
@@ -189,21 +240,21 @@ export default function StoreDetailScreen() {
           </Text>
           <View style={styles.priceRow}>
             <Text style={styles.productPrice}>
-              ${(item.sale_price || item.price).toFixed(2)}
+              ৳{price.toLocaleString()}
             </Text>
-            {hasDiscount && (
-              <Text style={styles.originalPrice}>${item.price.toFixed(2)}</Text>
+            {productHasDiscount && originalPrice > price && (
+              <Text style={styles.originalPrice}>৳{originalPrice.toLocaleString()}</Text>
             )}
           </View>
-          {item.rating && (
+          {item.rating ? (
             <View style={styles.ratingRow}>
               <Ionicons name="star" size={12} color="#F59E0B" />
               <Text style={styles.ratingText}>{item.rating.toFixed(1)}</Text>
-              {item.total_reviews && (
+              {item.total_reviews ? (
                 <Text style={styles.reviewCount}>({item.total_reviews})</Text>
-              )}
+              ) : null}
             </View>
-          )}
+          ) : null}
         </View>
         <TouchableOpacity
           style={styles.addToCartButton}

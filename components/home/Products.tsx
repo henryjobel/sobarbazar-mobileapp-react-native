@@ -1,30 +1,48 @@
-// components/home/Products.tsx - সম্পূর্ণ নতুন কোড
+// components/home/Products.tsx - Fixed for Expo Router and backend data structure
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
   FlatList,
-  Image,
   RefreshControl,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  Alert,
 } from 'react-native';
+import { Image } from 'expo-image';
+import { useCart } from '../../context/CartContext';
+import { useWishlist } from '../../context/WishlistContext';
 
 const { width } = Dimensions.get('window');
 const itemWidth = (width - 48) / 2;
 
-interface ProductType {
+interface ProductVariant {
   id: number;
   name: string;
   price: number;
-  original_price?: number;
-  discount_percentage?: number;
-  image_url?: string;
-  images?: any[];
+  final_price: number;
+  stock: number;
+  available_stock?: number;
+  image?: string;
+  discount?: {
+    name: string;
+    type: string;
+    value: number;
+    is_percentage: boolean;
+  };
+}
+
+interface ProductType {
+  id: number;
+  name: string;
+  description?: string;
+  default_variant?: ProductVariant;
+  variants?: ProductVariant[];
+  images?: { id: number; image: string }[];
   rating?: number;
   unit?: string;
   category?: {
@@ -35,7 +53,10 @@ interface ProductType {
     id: number;
     name: string;
   };
-  stock?: number;
+  store?: {
+    id: number;
+    name: string;
+  };
   subcategories?: {
     id: number;
     name: string;
@@ -47,13 +68,15 @@ interface ProductType {
 }
 
 const Products = () => {
-  const navigation = useNavigation();
+  const router = useRouter();
+  const { addItem } = useCart();
+  const { isInWishlist, addToWishlist, removeFromWishlist } = useWishlist();
   const [products, setProducts] = useState<ProductType[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
-  const [favorites, setFavorites] = useState<number[]>([]);
+  const [addingToCart, setAddingToCart] = useState<number | null>(null);
 
   // সরাসরি fetch ফাংশন
   const fetchProductsDirectly = async (pageNum = 1) => {
@@ -132,43 +155,20 @@ const Products = () => {
           images: data[0].images
         });
         
-        // Transform data
+        // Transform data - keep original structure for proper handling
         const transformedData = data.map((item: any) => {
-          // Get image URL
-          let imageUrl = 'https://via.placeholder.com/300x300/cccccc/969696?text=No+Image';
-          
-          if (item.images && item.images.length > 0) {
-            const firstImage = item.images[0];
-            if (typeof firstImage === 'string') {
-              imageUrl = firstImage;
-            } else if (firstImage?.image) {
-              imageUrl = firstImage.image;
-            } else if (firstImage?.url) {
-              imageUrl = firstImage.url;
-            }
-          }
-          
-          // Get category
-          let category = null;
-          if (item.category) {
-            category = item.category;
-          } else if (item.subcategories?.[0]?.category) {
-            category = item.subcategories[0].category;
-          }
-          
           return {
             id: item.id,
             name: item.name || 'No Name',
-            price: item.price || 0,
-            original_price: item.original_price || item.price,
-            discount_percentage: item.discount_percentage || 0,
-            image_url: imageUrl,
+            description: item.description,
+            default_variant: item.default_variant,
+            variants: item.variants,
             images: item.images || [],
             rating: item.rating || 0,
             unit: item.unit || 'piece',
-            category: category,
+            category: item.category,
             brand: item.brand,
-            stock: item.stock || 10,
+            store: item.store,
             subcategories: item.subcategories || []
           };
         });
@@ -218,72 +218,151 @@ const Products = () => {
     loadProducts(1, true);
   };
 
-  // Handle product press
+  // Handle product press - use Expo Router
   const handleProductPress = (product: ProductType) => {
     console.log("👉 Product pressed:", product.id, product.name);
-    navigation.navigate('ProductDetails', { productId: product.id });
+    router.push(`/screens/product/${product.id}`);
   };
 
-  // Handle add to cart
-  const handleAddToCart = (productId: number) => {
-    console.log('🛒 Add to cart:', productId);
-    // Implement add to cart logic here
+  // Handle add to cart - using CartContext
+  const handleAddToCart = async (product: ProductType) => {
+    if (addingToCart === product.id) return; // Prevent double-tap
+
+    setAddingToCart(product.id);
+    console.log('🛒 Adding to cart:', product.id, product.name);
+
+    try {
+      const cartProduct = {
+        id: product.id,
+        name: product.name,
+        price: getPrice(product),
+        image: getImageUrl(product),
+        variants: product.variants,
+      };
+
+      const success = await addItem(cartProduct, 1, product.default_variant);
+
+      if (success) {
+        Alert.alert('Success', `${product.name} added to cart!`, [{ text: 'OK' }]);
+      } else {
+        Alert.alert('Error', 'Failed to add item to cart. Please try again.');
+      }
+    } catch (error) {
+      console.error('Add to cart error:', error);
+      Alert.alert('Error', 'Something went wrong. Please try again.');
+    } finally {
+      setAddingToCart(null);
+    }
   };
 
-  // Handle favorite toggle
-  const handleToggleFavorite = (productId: number) => {
-    setFavorites(prev => 
-      prev.includes(productId) 
-        ? prev.filter(id => id !== productId)
-        : [...prev, productId]
-    );
-    console.log('❤️ Toggle favorite:', productId);
+  // Handle favorite toggle - using WishlistContext
+  const handleToggleFavorite = (product: ProductType) => {
+    const productData = {
+      id: product.id,
+      name: product.name,
+      price: getPrice(product),
+      image: getImageUrl(product),
+    };
+
+    if (isInWishlist(product.id)) {
+      removeFromWishlist(product.id);
+      console.log('💔 Removed from wishlist:', product.id);
+    } else {
+      addToWishlist(productData);
+      console.log('❤️ Added to wishlist:', product.id);
+    }
   };
 
-  // Get image URL
-  const getImageUrl = (item: ProductType) => {
-    if (item.image_url) return item.image_url;
-    
+  // Get image URL - handle backend structure
+  const getImageUrl = (item: ProductType): string => {
+    // Try default_variant image first
+    if (item.default_variant?.image) {
+      return item.default_variant.image;
+    }
+
+    // Try images array
     if (item.images && item.images.length > 0) {
       const firstImage = item.images[0];
       if (typeof firstImage === 'string') {
         return firstImage;
-      } else if (firstImage && firstImage.image) {
+      } else if (firstImage?.image) {
         return firstImage.image;
-      } else if (firstImage && firstImage.url) {
-        return firstImage.url;
       }
     }
-    
+
+    // Try first variant image
+    if (item.variants && item.variants.length > 0 && item.variants[0]?.image) {
+      return item.variants[0].image;
+    }
+
     return 'https://via.placeholder.com/300x300/cccccc/969696?text=No+Image';
   };
 
   // Get category name
-  const getCategoryName = (item: ProductType) => {
+  const getCategoryName = (item: ProductType): string => {
     if (item.category?.name) return item.category.name;
     if (item.subcategories?.[0]?.category?.name) return item.subcategories[0].category.name;
     if (item.brand?.name) return item.brand.name;
+    if (item.store?.name) return item.store.name;
     return '';
+  };
+
+  // Get price from default_variant
+  const getPrice = (item: ProductType): number => {
+    return item.default_variant?.final_price || item.default_variant?.price || 0;
+  };
+
+  // Get original price
+  const getOriginalPrice = (item: ProductType): number => {
+    return item.default_variant?.price || 0;
+  };
+
+  // Check if has discount
+  const hasDiscount = (item: ProductType): boolean => {
+    const variant = item.default_variant;
+    if (!variant) return false;
+    return !!(variant.discount || (variant.price > variant.final_price));
+  };
+
+  // Get discount percentage
+  const getDiscountPercentage = (item: ProductType): number => {
+    const variant = item.default_variant;
+    if (!variant) return 0;
+
+    if (variant.discount?.is_percentage) {
+      return variant.discount.value;
+    }
+
+    if (variant.price > variant.final_price) {
+      return Math.round(((variant.price - variant.final_price) / variant.price) * 100);
+    }
+
+    return 0;
   };
 
   // Render product item
   const renderProduct = ({ item }: { item: ProductType }) => {
-    const isFavorite = favorites.includes(item.id);
-    const isOutOfStock = item.stock !== undefined && item.stock <= 0;
-    
+    const isFavorite = isInWishlist(item.id);
+    const stock = item.default_variant?.available_stock ?? item.default_variant?.stock ?? 10;
+    const isOutOfStock = stock <= 0;
+
+    // Get prices using helper functions
+    const price = getPrice(item);
+    const originalPrice = getOriginalPrice(item);
+    const discountPercent = getDiscountPercentage(item);
+    const showDiscount = hasDiscount(item) && discountPercent > 0;
+
     // Format prices
-    const formattedPrice = `৳${item.price?.toLocaleString() || '0'}`;
-    const formattedOriginalPrice = item.original_price 
-      ? `৳${item.original_price.toLocaleString()}` 
-      : '';
-    
-    // Get image URL
+    const formattedPrice = `৳${price.toLocaleString()}`;
+    const formattedOriginalPrice = `৳${originalPrice.toLocaleString()}`;
+
+    // Get image URL and category
     const imageUrl = getImageUrl(item);
     const categoryName = getCategoryName(item);
 
     return (
       <TouchableOpacity
-        style={styles.productContainer}
+        style={[styles.productContainer, isOutOfStock && styles.outOfStock]}
         onPress={() => handleProductPress(item)}
         activeOpacity={0.7}
       >
@@ -292,20 +371,29 @@ const Products = () => {
           <Image
             source={{ uri: imageUrl }}
             style={styles.image}
-            resizeMode="cover"
+            contentFit="cover"
+            transition={200}
+            placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
           />
-          
+
           {/* Discount Badge */}
-          {item.discount_percentage && item.discount_percentage > 0 && (
+          {showDiscount && (
             <View style={styles.discountBadge}>
-              <Text style={styles.discountText}>{item.discount_percentage}% OFF</Text>
+              <Text style={styles.discountText}>{discountPercent}% OFF</Text>
             </View>
           )}
-          
+
+          {/* Out of Stock Badge */}
+          {isOutOfStock && (
+            <View style={styles.outOfStockBadge}>
+              <Text style={styles.outOfStockText}>Out of Stock</Text>
+            </View>
+          )}
+
           {/* Favorite Button */}
           <TouchableOpacity
             style={styles.favoriteButton}
-            onPress={() => handleToggleFavorite(item.id)}
+            onPress={() => handleToggleFavorite(item)}
           >
             <Ionicons
               name={isFavorite ? "heart" : "heart-outline"}
@@ -318,35 +406,46 @@ const Products = () => {
         {/* Product Info */}
         <View style={styles.infoContainer}>
           {/* Category/Brand */}
-          {categoryName && (
+          {categoryName ? (
             <Text style={styles.categoryText} numberOfLines={1}>
               {categoryName}
             </Text>
-          )}
-          
+          ) : null}
+
           {/* Product Name */}
           <Text style={styles.nameText} numberOfLines={2}>
             {item.name}
           </Text>
-          
+
           {/* Price */}
           <View style={styles.priceContainer}>
             <Text style={styles.priceText}>{formattedPrice}</Text>
-            
-            {item.original_price && item.original_price > item.price && (
+
+            {showDiscount && originalPrice > price && (
               <Text style={styles.originalPriceText}>
                 {formattedOriginalPrice}
               </Text>
             )}
           </View>
-          
+
           {/* Add to Cart Button */}
           <TouchableOpacity
-            style={styles.addToCartButton}
-            onPress={() => handleAddToCart(item.id)}
+            style={[
+              styles.addToCartButton,
+              isOutOfStock && styles.disabledButton,
+              addingToCart === item.id && styles.addingButton
+            ]}
+            onPress={() => !isOutOfStock && handleAddToCart(item)}
+            disabled={isOutOfStock || addingToCart === item.id}
           >
-            <Ionicons name="cart-outline" size={16} color="#fff" />
-            <Text style={styles.addToCartText}>Add to Cart</Text>
+            {addingToCart === item.id ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="cart-outline" size={16} color="#fff" />
+                <Text style={styles.addToCartText}>{isOutOfStock ? 'Out of Stock' : 'Add to Cart'}</Text>
+              </>
+            )}
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -542,6 +641,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 6,
   },
+  addingButton: {
+    backgroundColor: '#66BB6A',
+  },
   row: {
     justifyContent: 'space-between',
   },
@@ -587,6 +689,28 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  outOfStock: {
+    opacity: 0.7,
+  },
+  outOfStockBadge: {
+    position: 'absolute',
+    top: '40%',
+    left: '10%',
+    right: '10%',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 4,
+    alignItems: 'center',
+  },
+  outOfStockText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  disabledButton: {
+    backgroundColor: '#999',
   },
 });
 

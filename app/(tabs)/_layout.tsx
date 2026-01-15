@@ -1,57 +1,63 @@
 import { HapticTab } from '@/components/haptic-tab';
-import { useColorScheme } from '@/hooks/use-color-scheme.web';
-import { FontAwesome5, Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
+import { useCart } from '@/context/CartContext';
+import { useWishlist } from '@/context/WishlistContext';
+import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 
-// Blur Background Component
-function BlurTabBackground() {
+// Custom Tab Bar Icon with Badge
+interface TabIconProps {
+  name: keyof typeof Ionicons.glyphMap;
+  focusedName: keyof typeof Ionicons.glyphMap;
+  color: string;
+  focused: boolean;
+  badge?: number;
+  badgeColor?: string;
+}
+
+function TabIcon({ name, focusedName, color, focused, badge, badgeColor = '#EF4444' }: TabIconProps) {
   return (
-    <BlurView
-      intensity={80}
-      tint="light"
-      style={{
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        top: 0,
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        overflow: 'hidden',
-      }}
-    />
+    <View style={styles.iconContainer}>
+      <Ionicons
+        name={focused ? focusedName : name}
+        size={focused ? 26 : 24}
+        color={color}
+      />
+      {badge !== undefined && badge > 0 && (
+        <View style={[styles.badge, { backgroundColor: badgeColor }]}>
+          <Text style={styles.badgeText}>
+            {badge > 99 ? '99+' : badge}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+// Custom Tab Label
+function TabLabel({ label, focused, color }: { label: string; focused: boolean; color: string }) {
+  return (
+    <Text style={[styles.tabLabel, { color, fontWeight: focused ? '700' : '500' }]}>
+      {label}
+    </Text>
   );
 }
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const { itemCount: cartCount } = useCart();
+  const { itemCount: wishlistCount } = useWishlist();
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#4CAF50', // Your green color
-        tabBarInactiveTintColor: '#9CA3AF',
-        tabBarStyle: {
-          position: 'absolute',
-          borderTopWidth: 0,
-          elevation: 0,
-          shadowOpacity: 0,
-          height: 85,
-          paddingBottom: 20,
-          paddingTop: 10,
-          backgroundColor: 'transparent',
-        },
-        tabBarBackground: () => <BlurTabBackground />,
+        tabBarActiveTintColor: '#22C55E',
+        tabBarInactiveTintColor: '#6B7280',
+        tabBarStyle: styles.tabBar,
+        tabBarItemStyle: styles.tabBarItem,
         headerShown: false,
         tabBarButton: HapticTab,
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '600',
-          marginTop: 4,
-        },
+        tabBarHideOnKeyboard: true,
       }}
     >
       {/* Home Tab */}
@@ -59,12 +65,16 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons 
-              name={focused ? "home" : "home-outline"} 
-              size={focused ? 26 : size} 
-              color={color} 
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon
+              name="home-outline"
+              focusedName="home"
+              color={color}
+              focused={focused}
             />
+          ),
+          tabBarLabel: ({ focused, color }) => (
+            <TabLabel label="Home" focused={focused} color={color} />
           ),
         }}
       />
@@ -74,42 +84,45 @@ export default function TabLayout() {
         name="categories"
         options={{
           title: 'Categories',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons 
-              name={focused ? "grid" : "grid-outline"} 
-              size={focused ? 24 : size} 
-              color={color} 
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon
+              name="grid-outline"
+              focusedName="grid"
+              color={color}
+              focused={focused}
             />
+          ),
+          tabBarLabel: ({ focused, color }) => (
+            <TabLabel label="Shop" focused={focused} color={color} />
           ),
         }}
       />
 
-      {/* Cart Tab with Badge */}
+      {/* Cart Tab - Center with special styling */}
       <Tabs.Screen
         name="cart"
         options={{
           title: 'Cart',
-          tabBarIcon: ({ color, size, focused }) => (
-            <View style={{ position: 'relative' }}>
-              <Ionicons 
-                name={focused ? "cart" : "cart-outline"} 
-                size={focused ? 26 : size} 
-                color={color} 
-              />
-              <View style={{
-                position: 'absolute',
-                top: -5,
-                right: -5,
-                backgroundColor: '#EF4444',
-                borderRadius: 10,
-                width: 16,
-                height: 16,
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}>
-                <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>3</Text>
+          tabBarIcon: ({ color, focused }) => (
+            <View style={styles.cartIconWrapper}>
+              <View style={[styles.cartIconBackground, focused && styles.cartIconBackgroundActive]}>
+                <Ionicons
+                  name={focused ? 'cart' : 'cart-outline'}
+                  size={26}
+                  color={focused ? '#fff' : '#22C55E'}
+                />
+                {cartCount > 0 && (
+                  <View style={styles.cartBadge}>
+                    <Text style={styles.cartBadgeText}>
+                      {cartCount > 99 ? '99+' : cartCount}
+                    </Text>
+                  </View>
+                )}
               </View>
             </View>
+          ),
+          tabBarLabel: ({ focused, color }) => (
+            <TabLabel label="Cart" focused={focused} color={color} />
           ),
         }}
       />
@@ -119,12 +132,18 @@ export default function TabLayout() {
         name="wishlist"
         options={{
           title: 'Wishlist',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons 
-              name={focused ? "heart" : "heart-outline"} 
-              size={focused ? 24 : size} 
-              color={color} 
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon
+              name="heart-outline"
+              focusedName="heart"
+              color={color}
+              focused={focused}
+              badge={wishlistCount}
+              badgeColor="#EF4444"
             />
+          ),
+          tabBarLabel: ({ focused, color }) => (
+            <TabLabel label="Wishlist" focused={focused} color={color} />
           ),
         }}
       />
@@ -134,45 +153,128 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons 
-              name={focused ? "person" : "person-outline"} 
-              size={focused ? 24 : size} 
-              color={color} 
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon
+              name="person-outline"
+              focusedName="person"
+              color={color}
+              focused={focused}
             />
+          ),
+          tabBarLabel: ({ focused, color }) => (
+            <TabLabel label="Profile" focused={focused} color={color} />
           ),
         }}
       />
 
-      {/* Deals Tab */}
+      {/* Hidden tabs - accessible but not in tab bar */}
       <Tabs.Screen
         name="deals"
         options={{
-          title: 'Deals',
-          tabBarIcon: ({ color, size, focused }) => (
-            <FontAwesome5 
-              name="tag" 
-              size={focused ? 22 : 20} 
-              color={color} 
-            />
-          ),
+          href: null, // Hide from tab bar
         }}
       />
 
-      {/* Notifications Tab */}
       <Tabs.Screen
         name="notifications"
         options={{
-          title: 'Alerts',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons 
-              name={focused ? "notifications" : "notifications-outline"} 
-              size={focused ? 24 : size} 
-              color={color} 
-            />
-          ),
+          href: null, // Hide from tab bar
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: Platform.OS === 'ios' ? 88 : 70,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 0,
+    elevation: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    paddingTop: 8,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 10,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+  tabBarItem: {
+    paddingTop: 4,
+  },
+  iconContainer: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -10,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  tabLabel: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  // Cart special styling
+  cartIconWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -20,
+  },
+  cartIconBackground: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#E8F5E9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#fff',
+    shadowColor: '#22C55E',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  cartIconBackgroundActive: {
+    backgroundColor: '#22C55E',
+  },
+  cartBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#EF4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5,
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  cartBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+});

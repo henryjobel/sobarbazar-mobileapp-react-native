@@ -97,76 +97,127 @@ export async function loginUser(email, password) {
 
 export async function registerUser(userData) {
   const url = `${BASE_URL}/api/v1.0/customers/register/`;
-  
+
   console.log("📝 Register URL:", url);
-  
+
   try {
+    // Transform frontend data to match backend expectations
+    // Backend expects: username, password, name, email, phone, shipping_address, gender
+    const registerData = {
+      username: userData.email, // Use email as username
+      password: userData.password,
+      name: userData.name || `${userData.first_name || ''} ${userData.last_name || ''}`.trim(),
+      email: userData.email,
+      phone: userData.phone,
+      shipping_address: userData.shipping_address || '',
+      gender: userData.gender || null,
+    };
+
+    console.log("📝 Register Data:", { ...registerData, password: '***' });
+
     const res = await fetch(url, {
       method: 'POST',
       headers: getHeaders(),
-      body: JSON.stringify(userData),
+      body: JSON.stringify(registerData),
     });
-    
+
     console.log("📊 Register Status:", res.status);
-    
+
     const data = await parseResponse(res);
-    console.log("✅ Register Response:", data);
+
+    if (!res.ok) {
+      console.log("❌ Register Failed:", data);
+      throw new Error(data?.error || data?.detail || 'Registration failed');
+    }
+
+    console.log("✅ Register Success:", data);
+
+    // After successful registration, auto-login the user
+    if (data) {
+      const loginResponse = await loginUser(registerData.username, registerData.password);
+      if (loginResponse && loginResponse.access) {
+        return {
+          ...data,
+          access: loginResponse.access,
+          refresh: loginResponse.refresh,
+        };
+      }
+    }
+
     return data;
   } catch (err) {
     console.log("❌ Register Error:", err.message);
-    return null;
+    throw err; // Re-throw to let the caller handle it
   }
 }
 
 // ==================== PRODUCT APIs ====================
 export async function getProducts(page = 1, limit = 20, category = null, search = null) {
   let url = `${BASE_URL}/api/v1.0/customers/products/`;
-  
+
   // Build query parameters
   const params = new URLSearchParams();
   params.append('pagination', '1');
   params.append('page', page.toString());
   params.append('page_size', limit.toString());
-  
+
   if (category) {
     params.append('category', category);
   }
-  
+
   if (search) {
     params.append('search', search);
   }
-  
+
   url += `?${params.toString()}`;
-  
+
   console.log("🛍️ Products URL:", url);
-  
+
   try {
     const res = await fetch(url);
-    
+
     console.log("📊 Products Status:", res.status);
-    
+
     if (!res.ok) {
       console.log("❌ Products API Failed");
       return [];
     }
-    
+
     const json = await parseResponse(res);
-    
+
     // Check different response structures
-    if (json && json.data) {
+    // Structure: {success: true, data: {count: 12, results: [...]}} or {success: true, data: [...]}
+    if (json && json.success && json.data) {
+      // Check if data has results (paginated)
+      if (json.data.results && Array.isArray(json.data.results)) {
+        console.log(`✅ Found ${json.data.results.length} products in 'data.results'`);
+        return json.data.results;
+      }
+      // Check if data is array directly
+      if (Array.isArray(json.data)) {
+        console.log(`✅ Found ${json.data.length} products in 'data'`);
+        return json.data;
+      }
+    }
+    // Try direct data access
+    if (json && json.data && Array.isArray(json.data)) {
       console.log(`✅ Found ${json.data.length} products in 'data'`);
       return json.data;
-    } else if (json && json.results) {
+    }
+    // Try results directly
+    if (json && json.results && Array.isArray(json.results)) {
       console.log(`✅ Found ${json.results.length} products in 'results'`);
       return json.results;
-    } else if (Array.isArray(json)) {
+    }
+    // Try if response is array
+    if (Array.isArray(json)) {
       console.log(`✅ Found ${json.length} products in array`);
       return json;
-    } else {
-      console.log("⚠️ No products found in response");
-      console.log("📊 Full response:", json);
-      return [];
     }
+
+    console.log("⚠️ No products found in response");
+    console.log("📊 Response structure:", JSON.stringify(json, null, 2).substring(0, 500));
+    return [];
   } catch (err) {
     console.log("❌ Products Error:", err.message);
     return [];
@@ -800,19 +851,38 @@ export async function getStoreProducts(storeId, page = 1, limit = 20) {
 
     const json = await parseResponse(res);
 
-    if (json && json.data) {
+    // Check different response structures
+    // Structure: {success: true, data: {count: 12, results: [...]}} or {success: true, data: [...]}
+    if (json && json.success && json.data) {
+      // Check if data has results (paginated)
+      if (json.data.results && Array.isArray(json.data.results)) {
+        console.log(`✅ Found ${json.data.results.length} store products in 'data.results'`);
+        return json.data.results;
+      }
+      // Check if data is array directly
+      if (Array.isArray(json.data)) {
+        console.log(`✅ Found ${json.data.length} store products in 'data'`);
+        return json.data;
+      }
+    }
+    // Try direct data access
+    if (json && json.data && Array.isArray(json.data)) {
       console.log(`✅ Found ${json.data.length} store products in 'data'`);
       return json.data;
-    } else if (json && json.results) {
+    }
+    // Try results directly
+    if (json && json.results && Array.isArray(json.results)) {
       console.log(`✅ Found ${json.results.length} store products in 'results'`);
       return json.results;
-    } else if (Array.isArray(json)) {
+    }
+    // Try if response is array
+    if (Array.isArray(json)) {
       console.log(`✅ Found ${json.length} store products in array`);
       return json;
-    } else {
-      console.log("⚠️ No store products found");
-      return [];
     }
+
+    console.log("⚠️ No store products found");
+    return [];
   } catch (err) {
     console.log("❌ Store Products Error:", err.message);
     return [];
