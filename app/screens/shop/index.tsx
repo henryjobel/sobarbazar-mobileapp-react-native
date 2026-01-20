@@ -1,23 +1,22 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { Image } from 'expo-image';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Dimensions,
   FlatList,
+  Modal,
   RefreshControl,
-  StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Image } from 'expo-image';
-import { getProducts, getCategories } from '../../../utils/api';
-import { useCart, useWishlist } from '../../../context';
-
-const { width } = Dimensions.get('window');
-const CARD_WIDTH = (width - 48) / 2;
+import { getProducts, getCategories } from '@/utils/api';
+import { useCart } from '@/context/CartContext';
+import { useWishlist } from '@/context/WishlistContext';
+import { useCartNotification } from '@/context/CartNotificationContext';
 
 interface ProductVariant {
   id: number;
@@ -25,7 +24,6 @@ interface ProductVariant {
   price: number;
   final_price: number;
   stock: number;
-  available_stock?: number;
   image?: string;
   discount?: {
     name: string;
@@ -38,27 +36,30 @@ interface ProductVariant {
 interface Product {
   id: number;
   name: string;
-  slug?: string;
   default_variant?: ProductVariant;
   variants?: ProductVariant[];
   images?: { id: number; image: string }[];
-  category?: { id: number; name: string };
-  store?: { id: number; name: string };
   rating?: number;
+  total_reviews?: number;
+  store?: { id: number; name: string };
 }
 
 interface Category {
   id: number;
   name: string;
-  slug?: string;
-  image?: string;
 }
+
+type SortOption = 'default' | 'price_low' | 'price_high' | 'newest' | 'rating';
 
 export default function ShopScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ category?: string; categoryId?: string; categoryName?: string }>();
-  const { addItem } = useCart();
-  const { isInWishlist, toggleWishlist } = useWishlist();
+  const params = useLocalSearchParams();
+  const categoryId = params.category as string | undefined;
+  const categoryName = params.name ? decodeURIComponent(params.name as string) : undefined;
+
+  const { addItem, itemCount } = useCart();
+  const { isInWishlist, addToWishlist, removeFromWishlist } = useWishlist();
+  const { showNotification, setNavigateToCart } = useCartNotification();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -67,54 +68,51 @@ export default function ShopScreen() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
-  // Handle both 'category' and 'categoryId' params
-  const [selectedCategory, setSelectedCategory] = useState<number | null>(
-    params.categoryId ? parseInt(params.categoryId as string) :
-    params.category ? parseInt(params.category as string) : null
-  );
-  const [categoryTitle, setCategoryTitle] = useState<string>(
-    params.categoryName as string || 'Shop'
-  );
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string | undefined>(categoryId);
+  const [sortBy, setSortBy] = useState<SortOption>('default');
+  const [showSortModal, setShowSortModal] = useState(false);
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [addingToCart, setAddingToCart] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
+  // Set up navigation callback for cart notification
   useEffect(() => {
-    fetchCategories();
-    fetchProducts(true);
-  }, []);
+    setNavigateToCart(() => router.push('/(tabs)/cart'));
+  }, [router, setNavigateToCart]);
 
-  useEffect(() => {
-    fetchProducts(true);
-  }, [selectedCategory]);
-
-  const fetchCategories = async () => {
+  const fetchProducts = useCallback(async (pageNum: number = 1, reset: boolean = false) => {
     try {
-      const data = await getCategories();
-      setCategories(data || []);
-    } catch (error) {
-      console.error('Error fetching categories:', error);
-    }
-  };
+      if (pageNum === 1) setIsLoading(true);
 
-  const fetchProducts = useCallback(async (reset = false) => {
-    if (reset) {
-      setIsLoading(true);
-      setPage(1);
-    } else {
-      setIsLoadingMore(true);
-    }
+      const data = await getProducts(pageNum, 20, selectedCategory || undefined, searchQuery || undefined);
 
-    try {
-      const currentPage = reset ? 1 : page;
-      const data = await getProducts(currentPage, 20, selectedCategory);
+      let sortedData = [...(data || [])];
 
-      if (reset) {
-        setProducts(data || []);
-      } else {
-        setProducts(prev => [...prev, ...(data || [])]);
+      // Apply sorting
+      switch (sortBy) {
+        case 'price_low':
+          sortedData.sort((a, b) => getProductPrice(a) - getProductPrice(b));
+          break;
+        case 'price_high':
+          sortedData.sort((a, b) => getProductPrice(b) - getProductPrice(a));
+          break;
+        case 'rating':
+          sortedData.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+          break;
+        case 'newest':
+          sortedData.sort((a, b) => b.id - a.id);
+          break;
       }
 
-      setHasMore((data || []).length === 20);
-      if (!reset) setPage(currentPage + 1);
+      if (reset || pageNum === 1) {
+        setProducts(sortedData);
+      } else {
+        setProducts(prev => [...prev, ...sortedData]);
+      }
+
+      setPage(pageNum);
+      setHasMore((data?.length || 0) >= 20);
     } catch (error) {
       console.error('Error fetching products:', error);
     } finally {
@@ -122,25 +120,41 @@ export default function ShopScreen() {
       setIsRefreshing(false);
       setIsLoadingMore(false);
     }
-  }, [selectedCategory, page]);
+  }, [selectedCategory, searchQuery, sortBy]);
+
+  const fetchCategories = useCallback(async () => {
+    try {
+      const data = await getCategories();
+      setCategories(data || []);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
+
+  useEffect(() => {
+    fetchProducts(1, true);
+  }, [selectedCategory, sortBy]);
 
   const onRefresh = useCallback(() => {
     setIsRefreshing(true);
-    fetchProducts(true);
+    fetchProducts(1, true);
   }, [fetchProducts]);
 
-  const handleLoadMore = () => {
-    if (!isLoadingMore && hasMore && !isLoading) {
-      setPage(prev => prev + 1);
-      fetchProducts(false);
-    }
+  const loadMore = useCallback(() => {
+    if (isLoadingMore || !hasMore) return;
+    setIsLoadingMore(true);
+    fetchProducts(page + 1);
+  }, [isLoadingMore, hasMore, page, fetchProducts]);
+
+  const handleSearch = () => {
+    fetchProducts(1, true);
   };
 
-  const formatPrice = (price: number) => {
-    return `৳${price.toLocaleString()}`;
-  };
-
-  // Helper functions for product data
+  // Helper functions
   const getProductPrice = (product: Product): number => {
     return product.default_variant?.final_price || product.default_variant?.price || 0;
   };
@@ -166,50 +180,68 @@ export default function ShopScreen() {
   };
 
   const getProductImage = (product: Product): string => {
-    // Try default_variant image first
     if (product.default_variant?.image) return product.default_variant.image;
-    // Try images array
     if (product.images && product.images.length > 0) {
       const img = product.images[0];
       if (typeof img === 'string') return img;
       if (img?.image) return img.image;
     }
-    // Try first variant
     if (product.variants && product.variants.length > 0 && product.variants[0]?.image) {
       return product.variants[0].image;
     }
-    return 'https://via.placeholder.com/150';
+    return 'https://via.placeholder.com/200';
   };
 
   const handleAddToCart = async (product: Product) => {
-    // Transform product to match cart item format
-    const cartItem = {
-      id: product.id,
-      name: product.name,
-      price: getProductPrice(product),
-      image: getProductImage(product),
-    };
-    await addItem(cartItem, 1);
+    if (addingToCart === product.id) return;
+    setAddingToCart(product.id);
+
+    try {
+      const success = await addItem({
+        id: product.id,
+        name: product.name,
+        price: getProductPrice(product),
+        image: getProductImage(product),
+      }, 1);
+
+      if (success) {
+        // Show beautiful cart notification popup
+        showNotification(
+          {
+            name: product.name,
+            price: getProductPrice(product),
+            image: getProductImage(product),
+          },
+          itemCount + 1
+        );
+      }
+    } finally {
+      setAddingToCart(null);
+    }
   };
 
-  const renderCategoryItem = ({ item }: { item: Category }) => (
-    <TouchableOpacity
-      style={[
-        styles.categoryChip,
-        selectedCategory === item.id && styles.categoryChipSelected,
-      ]}
-      onPress={() => setSelectedCategory(selectedCategory === item.id ? null : item.id)}
-    >
-      <Text
-        style={[
-          styles.categoryChipText,
-          selectedCategory === item.id && styles.categoryChipTextSelected,
-        ]}
-      >
-        {item.name}
-      </Text>
-    </TouchableOpacity>
-  );
+  const toggleWishlist = async (product: Product) => {
+    if (isInWishlist(product.id)) {
+      await removeFromWishlist(product.id);
+    } else {
+      await addToWishlist({
+        id: product.id,
+        name: product.name,
+        price: getProductPrice(product),
+        image: getProductImage(product),
+      });
+    }
+  };
+
+  const formatPrice = (price: number) => `৳${price.toLocaleString()}`;
+
+  const sortOptions: { value: SortOption; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+    { value: 'default', label: 'Default', icon: 'apps-outline' },
+    { value: 'price_low', label: 'Price: Low to High', icon: 'trending-up-outline' },
+    { value: 'price_high', label: 'Price: High to Low', icon: 'trending-down-outline' },
+    { value: 'rating', label: 'Highest Rated', icon: 'star-outline' },
+    { value: 'newest', label: 'Newest First', icon: 'time-outline' },
+  ];
 
   const renderProductCard = ({ item }: { item: Product }) => {
     const isWishlisted = isInWishlist(item.id);
@@ -222,53 +254,71 @@ export default function ShopScreen() {
     if (viewMode === 'list') {
       return (
         <TouchableOpacity
-          style={styles.listCard}
+          className="bg-white mx-4 mb-3 rounded-2xl flex-row overflow-hidden shadow-sm"
           onPress={() => router.push(`/screens/product/${item.id}`)}
-          activeOpacity={0.7}
+          activeOpacity={0.9}
         >
-          <Image
-            source={{ uri: imageUrl }}
-            style={styles.listImage}
-            contentFit="cover"
-          />
-          <View style={styles.listInfo}>
-            <Text style={styles.listName} numberOfLines={2}>
-              {item.name}
-            </Text>
-            <View style={styles.listPriceRow}>
-              <Text style={styles.listPrice}>
-                {formatPrice(price)}
+          <View className="relative">
+            <Image
+              source={{ uri: imageUrl }}
+              style={{ width: 120, height: 120 }}
+              contentFit="cover"
+              transition={200}
+            />
+            {productHasDiscount && discountPercent > 0 && (
+              <View className="absolute top-2 left-2 bg-red-500 px-2 py-1 rounded-lg">
+                <Text className="text-white text-xs font-bold">-{discountPercent}%</Text>
+              </View>
+            )}
+          </View>
+          <View className="flex-1 p-3 justify-between">
+            <View>
+              <Text className="text-gray-800 font-semibold text-sm" numberOfLines={2}>
+                {item.name}
               </Text>
-              {productHasDiscount && originalPrice > price && (
-                <Text style={styles.listOriginalPrice}>
-                  {formatPrice(originalPrice)}
-                </Text>
+              {item.store && (
+                <Text className="text-gray-400 text-xs mt-1">{item.store.name}</Text>
+              )}
+              {item.rating && (
+                <View className="flex-row items-center mt-1">
+                  <Ionicons name="star" size={12} color="#FBBF24" />
+                  <Text className="text-gray-500 text-xs ml-1">{item.rating.toFixed(1)}</Text>
+                </View>
               )}
             </View>
-            {item.rating ? (
-              <View style={styles.listRating}>
-                <Ionicons name="star" size={12} color="#F59E0B" />
-                <Text style={styles.listRatingText}>{item.rating.toFixed(1)}</Text>
+            <View className="flex-row items-center justify-between mt-2">
+              <View>
+                <Text className="text-green-600 font-bold text-base">{formatPrice(price)}</Text>
+                {productHasDiscount && originalPrice > price && (
+                  <Text className="text-gray-400 text-xs line-through">{formatPrice(originalPrice)}</Text>
+                )}
               </View>
-            ) : null}
-          </View>
-          <View style={styles.listActions}>
-            <TouchableOpacity
-              style={[styles.listWishlistBtn, isWishlisted && styles.listWishlistBtnActive]}
-              onPress={() => toggleWishlist(item)}
-            >
-              <Ionicons
-                name={isWishlisted ? 'heart' : 'heart-outline'}
-                size={20}
-                color={isWishlisted ? '#EF4444' : '#6B7280'}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.listCartBtn}
-              onPress={() => handleAddToCart(item)}
-            >
-              <Ionicons name="cart-outline" size={20} color="#fff" />
-            </TouchableOpacity>
+              <View className="flex-row items-center">
+                <TouchableOpacity
+                  className="w-9 h-9 rounded-full bg-gray-100 items-center justify-center mr-2"
+                  onPress={() => toggleWishlist(item)}
+                >
+                  <Ionicons
+                    name={isWishlisted ? 'heart' : 'heart-outline'}
+                    size={18}
+                    color={isWishlisted ? '#EF4444' : '#6B7280'}
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  className={`w-9 h-9 rounded-full items-center justify-center ${
+                    addingToCart === item.id ? 'bg-green-400' : 'bg-green-500'
+                  }`}
+                  onPress={() => handleAddToCart(item)}
+                  disabled={addingToCart === item.id}
+                >
+                  {addingToCart === item.id ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Ionicons name="cart-outline" size={18} color="#fff" />
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
         </TouchableOpacity>
       );
@@ -276,23 +326,24 @@ export default function ShopScreen() {
 
     return (
       <TouchableOpacity
-        style={styles.productCard}
+        className="w-[48%] bg-white rounded-2xl mb-4 overflow-hidden shadow-sm"
         onPress={() => router.push(`/screens/product/${item.id}`)}
-        activeOpacity={0.7}
+        activeOpacity={0.9}
       >
-        <View style={styles.imageContainer}>
+        <View className="relative">
           <Image
             source={{ uri: imageUrl }}
-            style={styles.productImage}
+            style={{ width: '100%', height: 160 }}
             contentFit="cover"
+            transition={200}
           />
           {productHasDiscount && discountPercent > 0 && (
-            <View style={styles.discountBadge}>
-              <Text style={styles.discountText}>-{discountPercent}%</Text>
+            <View className="absolute top-2 left-2 bg-red-500 px-2 py-1 rounded-lg">
+              <Text className="text-white text-xs font-bold">-{discountPercent}%</Text>
             </View>
           )}
           <TouchableOpacity
-            style={[styles.wishlistBtn, isWishlisted && styles.wishlistBtnActive]}
+            className="absolute top-2 right-2 w-8 h-8 bg-white rounded-full items-center justify-center shadow-md"
             onPress={() => toggleWishlist(item)}
           >
             <Ionicons
@@ -302,465 +353,324 @@ export default function ShopScreen() {
             />
           </TouchableOpacity>
         </View>
-
-        <View style={styles.productInfo}>
-          <Text style={styles.productName} numberOfLines={2}>
+        <View className="p-3">
+          <Text className="text-gray-800 font-semibold text-sm" numberOfLines={2}>
             {item.name}
           </Text>
-
-          <View style={styles.priceRow}>
-            <Text style={styles.currentPrice}>
-              {formatPrice(price)}
-            </Text>
+          {item.rating && (
+            <View className="flex-row items-center mt-1">
+              <Ionicons name="star" size={12} color="#FBBF24" />
+              <Text className="text-gray-500 text-xs ml-1">{item.rating.toFixed(1)}</Text>
+            </View>
+          )}
+          <View className="flex-row items-center mt-2">
+            <Text className="text-green-600 font-bold text-base">{formatPrice(price)}</Text>
             {productHasDiscount && originalPrice > price && (
-              <Text style={styles.originalPrice}>
-                {formatPrice(originalPrice)}
-              </Text>
+              <Text className="text-gray-400 text-xs line-through ml-2">{formatPrice(originalPrice)}</Text>
             )}
           </View>
-
-          {item.rating ? (
-            <View style={styles.ratingRow}>
-              <Ionicons name="star" size={12} color="#F59E0B" />
-              <Text style={styles.ratingText}>{item.rating.toFixed(1)}</Text>
-            </View>
-          ) : null}
+          <TouchableOpacity
+            className={`mt-3 py-2.5 rounded-xl items-center ${
+              addingToCart === item.id ? 'bg-green-400' : 'bg-green-500'
+            }`}
+            onPress={() => handleAddToCart(item)}
+            disabled={addingToCart === item.id}
+          >
+            {addingToCart === item.id ? (
+              <View className="flex-row items-center">
+                <ActivityIndicator size="small" color="#fff" />
+                <Text className="text-white font-semibold text-sm ml-2">Adding...</Text>
+              </View>
+            ) : (
+              <View className="flex-row items-center">
+                <Ionicons name="cart-outline" size={16} color="#fff" />
+                <Text className="text-white font-semibold text-sm ml-1.5">Add to Cart</Text>
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
-
-        <TouchableOpacity
-          style={styles.addToCartBtn}
-          onPress={() => handleAddToCart(item)}
-        >
-          <Ionicons name="cart-outline" size={16} color="#fff" />
-          <Text style={styles.addToCartText}>Add</Text>
-        </TouchableOpacity>
       </TouchableOpacity>
     );
   };
 
-  const renderFooter = () => {
-    if (!isLoadingMore) return null;
-    return (
-      <View style={styles.footerLoader}>
-        <ActivityIndicator size="small" color="#3B82F6" />
-      </View>
-    );
-  };
+  const renderHeader = () => (
+    <View className="mb-4">
+      {/* Category Chips */}
+      {categories.length > 0 && (
+        <View className="px-4 mb-4">
+          <FlatList
+            horizontal
+            data={[{ id: 0, name: 'All' }, ...categories]}
+            keyExtractor={(item) => item.id.toString()}
+            showsHorizontalScrollIndicator={false}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                className={`mr-2 px-4 py-2 rounded-full ${
+                  (item.id === 0 && !selectedCategory) || selectedCategory === item.id.toString()
+                    ? 'bg-green-500'
+                    : 'bg-white border border-gray-200'
+                }`}
+                onPress={() => {
+                  setSelectedCategory(item.id === 0 ? undefined : item.id.toString());
+                }}
+              >
+                <Text
+                  className={`font-semibold text-sm ${
+                    (item.id === 0 && !selectedCategory) || selectedCategory === item.id.toString()
+                      ? 'text-white'
+                      : 'text-gray-600'
+                  }`}
+                >
+                  {item.name}
+                </Text>
+              </TouchableOpacity>
+            )}
+          />
+        </View>
+      )}
 
-  const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-      <View style={styles.emptyIconContainer}>
-        <Ionicons name="storefront-outline" size={64} color="#9CA3AF" />
+      {/* Results count and view toggle */}
+      <View className="px-4 flex-row items-center justify-between">
+        <Text className="text-gray-500 text-sm">
+          {products.length} products found
+        </Text>
+        <View className="flex-row items-center">
+          <TouchableOpacity
+            className={`w-9 h-9 rounded-lg items-center justify-center mr-2 ${
+              viewMode === 'grid' ? 'bg-green-500' : 'bg-gray-100'
+            }`}
+            onPress={() => setViewMode('grid')}
+          >
+            <Ionicons name="grid-outline" size={18} color={viewMode === 'grid' ? '#fff' : '#6B7280'} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            className={`w-9 h-9 rounded-lg items-center justify-center ${
+              viewMode === 'list' ? 'bg-green-500' : 'bg-gray-100'
+            }`}
+            onPress={() => setViewMode('list')}
+          >
+            <Ionicons name="list-outline" size={18} color={viewMode === 'list' ? '#fff' : '#6B7280'} />
+          </TouchableOpacity>
+        </View>
       </View>
-      <Text style={styles.emptyTitle}>No products found</Text>
-      <Text style={styles.emptySubtitle}>
-        {selectedCategory
-          ? 'Try selecting a different category'
-          : 'Products will appear here'}
-      </Text>
     </View>
   );
 
+  const renderEmpty = () => (
+    <View className="flex-1 items-center justify-center py-20">
+      <View className="w-24 h-24 bg-gray-100 rounded-full items-center justify-center mb-4">
+        <Ionicons name="bag-outline" size={48} color="#9CA3AF" />
+      </View>
+      <Text className="text-gray-800 font-bold text-lg mb-2">No products found</Text>
+      <Text className="text-gray-500 text-center px-8">
+        Try adjusting your filters or search term
+      </Text>
+      <TouchableOpacity
+        className="mt-6 bg-green-500 px-6 py-3 rounded-xl"
+        onPress={() => {
+          setSelectedCategory(undefined);
+          setSearchQuery('');
+          setSortBy('default');
+        }}
+      >
+        <Text className="text-white font-semibold">Clear Filters</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  if (isLoading && products.length === 0) {
+    return (
+      <SafeAreaView className="flex-1 bg-gray-50">
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color="#22C55E" />
+          <Text className="text-gray-500 mt-4">Loading products...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView className="flex-1 bg-gray-50">
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#1F2937" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{categoryTitle}</Text>
-        <View style={styles.headerActions}>
+      <View className="bg-white px-4 py-4 border-b border-gray-100 shadow-sm">
+        <View className="flex-row items-center mb-4">
           <TouchableOpacity
-            style={styles.searchButton}
-            onPress={() => router.push('/screens/search')}
+            className="w-10 h-10 rounded-full bg-gray-100 items-center justify-center mr-3"
+            onPress={() => router.back()}
           >
-            <Ionicons name="search-outline" size={22} color="#1F2937" />
+            <Ionicons name="arrow-back" size={22} color="#374151" />
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.viewModeButton}
-            onPress={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
-          >
-            <Ionicons
-              name={viewMode === 'grid' ? 'list-outline' : 'grid-outline'}
-              size={22}
-              color="#1F2937"
-            />
-          </TouchableOpacity>
+          <View className="flex-1">
+            <Text className="text-xl font-bold text-gray-800">
+              {categoryName || 'All Products'}
+            </Text>
+            <Text className="text-sm text-gray-500">Browse our collection</Text>
+          </View>
         </View>
-      </View>
 
-      {/* Categories */}
-      <View style={styles.categoriesContainer}>
-        <FlatList
-          horizontal
-          data={[{ id: 0, name: 'All', slug: 'all' } as Category, ...categories]}
-          renderItem={({ item }) =>
-            item.id === 0 ? (
-              <TouchableOpacity
-                style={[
-                  styles.categoryChip,
-                  !selectedCategory && styles.categoryChipSelected,
-                ]}
-                onPress={() => setSelectedCategory(null)}
-              >
-                <Text
-                  style={[
-                    styles.categoryChipText,
-                    !selectedCategory && styles.categoryChipTextSelected,
-                  ]}
-                >
-                  All
-                </Text>
+        {/* Search Bar */}
+        <View className="flex-row items-center">
+          <View className="flex-1 flex-row items-center bg-gray-100 rounded-xl px-4 py-3 mr-3">
+            <Ionicons name="search" size={20} color="#9CA3AF" />
+            <TextInput
+              className="flex-1 ml-3 text-base text-gray-800"
+              placeholder="Search products..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              onSubmitEditing={handleSearch}
+              placeholderTextColor="#9CA3AF"
+              returnKeyType="search"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <Ionicons name="close-circle" size={20} color="#9CA3AF" />
               </TouchableOpacity>
-            ) : (
-              renderCategoryItem({ item })
-            )
-          }
-          keyExtractor={(item) => item.id.toString()}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoriesList}
-        />
+            )}
+          </View>
+          <TouchableOpacity
+            className="w-12 h-12 bg-gray-100 rounded-xl items-center justify-center mr-2"
+            onPress={() => setShowSortModal(true)}
+          >
+            <Ionicons name="swap-vertical-outline" size={22} color="#374151" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            className="w-12 h-12 bg-green-500 rounded-xl items-center justify-center"
+            onPress={() => setShowFilterModal(true)}
+          >
+            <Ionicons name="options-outline" size={22} color="#fff" />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Products */}
-      {isLoading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#3B82F6" />
-          <Text style={styles.loadingText}>Loading products...</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={products}
-          renderItem={renderProductCard}
-          keyExtractor={(item) => item.id.toString()}
-          numColumns={viewMode === 'grid' ? 2 : 1}
-          key={viewMode}
-          columnWrapperStyle={viewMode === 'grid' ? styles.row : undefined}
-          contentContainerStyle={[
-            styles.productsContainer,
-            products.length === 0 && styles.emptyContainer,
-          ]}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={onRefresh}
-              colors={['#3B82F6']}
-              tintColor="#3B82F6"
+      {/* Products List */}
+      <FlatList
+        data={products}
+        renderItem={renderProductCard}
+        keyExtractor={(item) => item.id.toString()}
+        numColumns={viewMode === 'grid' ? 2 : 1}
+        key={viewMode}
+        columnWrapperStyle={viewMode === 'grid' ? { paddingHorizontal: 16, justifyContent: 'space-between' } : undefined}
+        contentContainerStyle={{ paddingTop: 16, paddingBottom: 100 }}
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={renderHeader}
+        ListEmptyComponent={renderEmpty}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={onRefresh}
+            colors={['#22C55E']}
+            tintColor="#22C55E"
+          />
+        }
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          isLoadingMore ? (
+            <View className="py-4 items-center">
+              <ActivityIndicator size="small" color="#22C55E" />
+            </View>
+          ) : null
+        }
+      />
+
+      {/* Sort Modal */}
+      <Modal
+        visible={showSortModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowSortModal(false)}
+      >
+        <TouchableOpacity
+          className="flex-1 bg-black/50 justify-end"
+          activeOpacity={1}
+          onPress={() => setShowSortModal(false)}
+        >
+          <View className="bg-white rounded-t-3xl">
+            <View className="w-12 h-1 bg-gray-300 rounded-full self-center my-4" />
+            <Text className="text-xl font-bold text-gray-800 px-6 mb-4">Sort By</Text>
+            {sortOptions.map((option) => (
+              <TouchableOpacity
+                key={option.value}
+                className={`flex-row items-center px-6 py-4 border-b border-gray-100 ${
+                  sortBy === option.value ? 'bg-green-50' : ''
+                }`}
+                onPress={() => {
+                  setSortBy(option.value);
+                  setShowSortModal(false);
+                }}
+              >
+                <View className={`w-10 h-10 rounded-full items-center justify-center mr-4 ${
+                  sortBy === option.value ? 'bg-green-500' : 'bg-gray-100'
+                }`}>
+                  <Ionicons
+                    name={option.icon}
+                    size={20}
+                    color={sortBy === option.value ? '#fff' : '#6B7280'}
+                  />
+                </View>
+                <Text className={`flex-1 font-semibold ${
+                  sortBy === option.value ? 'text-green-600' : 'text-gray-700'
+                }`}>
+                  {option.label}
+                </Text>
+                {sortBy === option.value && (
+                  <Ionicons name="checkmark-circle" size={24} color="#22C55E" />
+                )}
+              </TouchableOpacity>
+            ))}
+            <View className="h-8" />
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Filter Modal */}
+      <Modal
+        visible={showFilterModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowFilterModal(false)}
+      >
+        <TouchableOpacity
+          className="flex-1 bg-black/50 justify-end"
+          activeOpacity={1}
+          onPress={() => setShowFilterModal(false)}
+        >
+          <View className="bg-white rounded-t-3xl" style={{ maxHeight: '70%' }}>
+            <View className="w-12 h-1 bg-gray-300 rounded-full self-center my-4" />
+            <View className="flex-row items-center justify-between px-6 mb-4">
+              <Text className="text-xl font-bold text-gray-800">Filter by Category</Text>
+              <TouchableOpacity onPress={() => setSelectedCategory(undefined)}>
+                <Text className="text-green-500 font-semibold">Clear</Text>
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={categories}
+              keyExtractor={(item) => item.id.toString()}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  className={`flex-row items-center px-6 py-4 border-b border-gray-100 ${
+                    selectedCategory === item.id.toString() ? 'bg-green-50' : ''
+                  }`}
+                  onPress={() => {
+                    setSelectedCategory(item.id.toString());
+                    setShowFilterModal(false);
+                  }}
+                >
+                  <Text className={`flex-1 font-medium ${
+                    selectedCategory === item.id.toString() ? 'text-green-600' : 'text-gray-700'
+                  }`}>
+                    {item.name}
+                  </Text>
+                  {selectedCategory === item.id.toString() && (
+                    <Ionicons name="checkmark-circle" size={24} color="#22C55E" />
+                  )}
+                </TouchableOpacity>
+              )}
             />
-          }
-          onEndReached={handleLoadMore}
-          onEndReachedThreshold={0.5}
-          ListFooterComponent={renderFooter}
-          ListEmptyComponent={renderEmptyState}
-        />
-      )}
+            <View className="h-8" />
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F3F4F6',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1F2937',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  searchButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  viewModeButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  categoriesContainer: {
-    backgroundColor: '#fff',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  categoriesList: {
-    paddingHorizontal: 16,
-    gap: 8,
-  },
-  categoryChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
-    marginRight: 8,
-  },
-  categoryChipSelected: {
-    backgroundColor: '#3B82F6',
-  },
-  categoryChipText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#6B7280',
-  },
-  categoryChipTextSelected: {
-    color: '#fff',
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  productsContainer: {
-    padding: 16,
-  },
-  emptyContainer: {
-    flex: 1,
-  },
-  row: {
-    justifyContent: 'space-between',
-  },
-  productCard: {
-    width: CARD_WIDTH,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    marginBottom: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  imageContainer: {
-    position: 'relative',
-    aspectRatio: 1,
-  },
-  productImage: {
-    width: '100%',
-    height: '100%',
-  },
-  discountBadge: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    backgroundColor: '#EF4444',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  discountText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  wishlistBtn: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  wishlistBtnActive: {
-    backgroundColor: '#FEE2E2',
-  },
-  productInfo: {
-    padding: 12,
-  },
-  productName: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#1F2937',
-    marginBottom: 6,
-    minHeight: 36,
-  },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  currentPrice: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1F2937',
-  },
-  originalPrice: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    textDecorationLine: 'line-through',
-  },
-  ratingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 6,
-    gap: 4,
-  },
-  ratingText: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  addToCartBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#3B82F6',
-    paddingVertical: 10,
-    gap: 4,
-  },
-  addToCartText: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  // List view styles
-  listCard: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    marginBottom: 12,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  listImage: {
-    width: 100,
-    height: 100,
-  },
-  listInfo: {
-    flex: 1,
-    padding: 12,
-    justifyContent: 'center',
-  },
-  listName: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#1F2937',
-    marginBottom: 6,
-  },
-  listPriceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  listPrice: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1F2937',
-  },
-  listOriginalPrice: {
-    fontSize: 13,
-    color: '#9CA3AF',
-    textDecorationLine: 'line-through',
-  },
-  listRating: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-    gap: 4,
-  },
-  listRatingText: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  listActions: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    gap: 8,
-  },
-  listWishlistBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  listWishlistBtnActive: {
-    backgroundColor: '#FEE2E2',
-  },
-  listCartBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#3B82F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  footerLoader: {
-    paddingVertical: 20,
-    alignItems: 'center',
-  },
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-  },
-  emptyIconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1F2937',
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-  },
-});

@@ -68,30 +68,75 @@ export async function testApiConnection() {
 // ==================== AUTH APIs ====================
 export async function loginUser(email, password) {
   const url = `${AUTH_URL}/auth/jwt/create/`;
-  
+
   console.log("🔐 Login URL:", url);
-  
+  console.log("🔐 Login Email:", email);
+
   try {
-    const res = await fetch(url, {
+    // Try with email field first (Djoser with email auth)
+    let res = await fetch(url, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ email, password }),
     });
-    
-    console.log("📊 Login Status:", res.status);
-    
+
+    console.log("📊 Login Status (email):", res.status);
+
+    // If email login fails, try with username field
+    if (!res.ok) {
+      console.log("🔄 Trying with username field...");
+      res = await fetch(url, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ username: email, password }),
+      });
+      console.log("📊 Login Status (username):", res.status);
+    }
+
     if (!res.ok) {
       const errorData = await parseResponse(res);
       console.log("❌ Login Failed:", errorData);
-      throw new Error(errorData?.detail || 'Login failed');
+
+      // Parse error messages
+      let errorMessage = 'Invalid email or password';
+      if (errorData) {
+        if (errorData.detail) {
+          errorMessage = errorData.detail;
+        } else if (errorData.non_field_errors) {
+          errorMessage = Array.isArray(errorData.non_field_errors)
+            ? errorData.non_field_errors.join(', ')
+            : errorData.non_field_errors;
+        } else if (errorData.email) {
+          errorMessage = Array.isArray(errorData.email) ? errorData.email[0] : errorData.email;
+        } else if (errorData.password) {
+          errorMessage = Array.isArray(errorData.password) ? errorData.password[0] : errorData.password;
+        }
+      }
+      throw new Error(errorMessage);
     }
-    
+
     const data = await parseResponse(res);
     console.log("✅ Login Success:", data ? 'Token received' : 'No data');
+
+    // Handle response structure: {success: true, data: {access, refresh}} or {access, refresh}
+    if (data && data.success && data.data) {
+      console.log("✅ Extracting tokens from data.data");
+      return {
+        access: data.data.access,
+        refresh: data.data.refresh,
+      };
+    }
+
+    // If tokens are directly in response
+    if (data && data.access) {
+      return data;
+    }
+
+    console.log("⚠️ Unexpected response structure:", data);
     return data;
   } catch (err) {
     console.log("❌ Login Error:", err.message);
-    return null;
+    throw err; // Re-throw to let caller handle
   }
 }
 
@@ -820,14 +865,22 @@ export async function getStoreById(storeId) {
     }
 
     const json = await parseResponse(res);
-    console.log("✅ Store Detail Response:", json ? 'Received' : 'No data');
+    console.log("✅ Store Detail Raw Response:", JSON.stringify(json).substring(0, 500));
 
     // Handle response structure
     if (json && json.success && json.data) {
+      console.log("✅ Store data from json.data:", json.data);
       return json.data;
     } else if (json && json.data) {
+      console.log("✅ Store data from json.data (no success):", json.data);
       return json.data;
     }
+    // If json is the store object directly
+    if (json && (json.id || json.name || json.slug)) {
+      console.log("✅ Store data is direct object:", json);
+      return json;
+    }
+    console.log("⚠️ Store data structure unknown:", json);
     return json;
   } catch (err) {
     console.log("❌ Store Detail Error:", err.message);
@@ -836,57 +889,57 @@ export async function getStoreById(storeId) {
 }
 
 export async function getStoreProducts(storeId, page = 1, limit = 20) {
-  const url = `${BASE_URL}/api/v1.0/customers/products/?store=${storeId}&pagination=1&page=${page}&page_size=${limit}`;
+  // Try multiple URL patterns - some backends use 'store', others use 'vendor'
+  const urls = [
+    `${BASE_URL}/api/v1.0/customers/products/?store=${storeId}&pagination=1&page=${page}&page_size=${limit}`,
+    `${BASE_URL}/api/v1.0/customers/products/?vendor=${storeId}&pagination=1&page=${page}&page_size=${limit}`,
+    `${BASE_URL}/api/v1.0/customers/products/stores_list/${storeId}/products/`,
+  ];
 
-  console.log("🛍️ Store Products URL:", url);
+  for (const url of urls) {
+    console.log("🛍️ Trying Store Products URL:", url);
 
-  try {
-    const res = await fetch(url);
+    try {
+      const res = await fetch(url);
 
-    console.log("📊 Store Products Status:", res.status);
+      console.log("📊 Store Products Status:", res.status);
 
-    if (!res.ok) {
-      throw new Error('Failed to fetch store products');
-    }
-
-    const json = await parseResponse(res);
-
-    // Check different response structures
-    // Structure: {success: true, data: {count: 12, results: [...]}} or {success: true, data: [...]}
-    if (json && json.success && json.data) {
-      // Check if data has results (paginated)
-      if (json.data.results && Array.isArray(json.data.results)) {
-        console.log(`✅ Found ${json.data.results.length} store products in 'data.results'`);
-        return json.data.results;
+      if (!res.ok) {
+        console.log("❌ URL failed, trying next...");
+        continue;
       }
-      // Check if data is array directly
-      if (Array.isArray(json.data)) {
-        console.log(`✅ Found ${json.data.length} store products in 'data'`);
-        return json.data;
-      }
-    }
-    // Try direct data access
-    if (json && json.data && Array.isArray(json.data)) {
-      console.log(`✅ Found ${json.data.length} store products in 'data'`);
-      return json.data;
-    }
-    // Try results directly
-    if (json && json.results && Array.isArray(json.results)) {
-      console.log(`✅ Found ${json.results.length} store products in 'results'`);
-      return json.results;
-    }
-    // Try if response is array
-    if (Array.isArray(json)) {
-      console.log(`✅ Found ${json.length} store products in array`);
-      return json;
-    }
 
-    console.log("⚠️ No store products found");
-    return [];
-  } catch (err) {
-    console.log("❌ Store Products Error:", err.message);
-    return [];
+      const json = await parseResponse(res);
+      console.log("📦 Store Products Raw:", JSON.stringify(json).substring(0, 300));
+
+      let products = [];
+
+      // Check different response structures
+      if (json && json.success && json.data) {
+        if (json.data.results && Array.isArray(json.data.results)) {
+          products = json.data.results;
+        } else if (Array.isArray(json.data)) {
+          products = json.data;
+        }
+      } else if (json && json.data && Array.isArray(json.data)) {
+        products = json.data;
+      } else if (json && json.results && Array.isArray(json.results)) {
+        products = json.results;
+      } else if (Array.isArray(json)) {
+        products = json;
+      }
+
+      if (products.length > 0) {
+        console.log(`✅ Found ${products.length} store products`);
+        return products;
+      }
+    } catch (err) {
+      console.log("❌ Store Products Error:", err.message);
+    }
   }
+
+  console.log("⚠️ No store products found from any URL");
+  return [];
 }
 
 export async function getBrands() {
@@ -957,22 +1010,36 @@ export async function getPaymentMethods() {
 // ==================== USER PROFILE APIs ====================
 export async function getUserProfile(token) {
   const url = `${AUTH_URL}/auth/users/me/`;
-  
+
   console.log("👤 User Profile URL:", url);
-  
+
   try {
     const res = await fetch(url, {
       headers: getHeaders(token),
     });
-    
+
     console.log("📊 User Profile Status:", res.status);
-    
+
     if (!res.ok) {
+      console.log("❌ User Profile fetch failed with status:", res.status);
       throw new Error('Failed to fetch user profile');
     }
-    
+
     const data = await parseResponse(res);
-    console.log("✅ User Profile Response:", data ? 'Received' : 'No data');
+    console.log("✅ User Profile Response:", JSON.stringify(data).substring(0, 200));
+
+    // Handle response structure: {success: true, data: {...}} or direct user object
+    if (data && data.success && data.data) {
+      console.log("✅ Extracting profile from data.data");
+      return data.data;
+    }
+
+    // If user data is directly in response
+    if (data && (data.id || data.email || data.username)) {
+      return data;
+    }
+
+    console.log("⚠️ Unexpected profile structure, returning as is");
     return data;
   } catch (err) {
     console.log("❌ User Profile Error:", err.message);

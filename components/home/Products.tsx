@@ -11,11 +11,11 @@ import {
   Text,
   TouchableOpacity,
   View,
-  Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
+import { useCartNotification } from '../../context/CartNotificationContext';
 
 const { width } = Dimensions.get('window');
 const itemWidth = (width - 48) / 2;
@@ -69,14 +69,20 @@ interface ProductType {
 
 const Products = () => {
   const router = useRouter();
-  const { addItem } = useCart();
+  const { addItem, itemCount } = useCart();
   const { isInWishlist, addToWishlist, removeFromWishlist } = useWishlist();
+  const { showNotification, setNavigateToCart } = useCartNotification();
   const [products, setProducts] = useState<ProductType[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [addingToCart, setAddingToCart] = useState<number | null>(null);
+
+  // Set up navigation callback for cart notification
+  useEffect(() => {
+    setNavigateToCart(() => router.push('/(tabs)/cart'));
+  }, [router, setNavigateToCart]);
 
   // সরাসরি fetch ফাংশন
   const fetchProductsDirectly = async (pageNum = 1) => {
@@ -224,7 +230,7 @@ const Products = () => {
     router.push(`/screens/product/${product.id}`);
   };
 
-  // Handle add to cart - using CartContext
+  // Handle add to cart - using CartContext with nice popup
   const handleAddToCart = async (product: ProductType) => {
     if (addingToCart === product.id) return; // Prevent double-tap
 
@@ -243,13 +249,18 @@ const Products = () => {
       const success = await addItem(cartProduct, 1, product.default_variant);
 
       if (success) {
-        Alert.alert('Success', `${product.name} added to cart!`, [{ text: 'OK' }]);
-      } else {
-        Alert.alert('Error', 'Failed to add item to cart. Please try again.');
+        // Show beautiful cart notification popup
+        showNotification(
+          {
+            name: product.name,
+            price: getPrice(product),
+            image: getImageUrl(product),
+          },
+          itemCount + 1
+        );
       }
     } catch (error) {
       console.error('Add to cart error:', error);
-      Alert.alert('Error', 'Something went wrong. Please try again.');
     } finally {
       setAddingToCart(null);
     }

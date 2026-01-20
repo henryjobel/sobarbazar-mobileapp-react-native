@@ -130,12 +130,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setState(prev => ({ ...prev, isLoading: true }));
 
-      const tokenResponse = await loginUser(credentials.email, credentials.password);
+      console.log('🔐 AuthContext: Attempting login for:', credentials.email);
+
+      let tokenResponse;
+      try {
+        tokenResponse = await loginUser(credentials.email, credentials.password);
+      } catch (loginError: any) {
+        console.error('Login API error:', loginError);
+        setState(prev => ({ ...prev, isLoading: false }));
+        return { success: false, error: loginError.message || 'Invalid email or password' };
+      }
 
       if (!tokenResponse || !tokenResponse.access) {
         setState(prev => ({ ...prev, isLoading: false }));
         return { success: false, error: 'Invalid email or password' };
       }
+
+      console.log('✅ AuthContext: Token received, fetching profile...');
 
       const tokens: AuthTokens = {
         access: tokenResponse.access,
@@ -146,8 +157,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const profile = await getUserProfile(tokens.access);
 
       if (!profile) {
-        setState(prev => ({ ...prev, isLoading: false }));
-        return { success: false, error: 'Failed to fetch user profile' };
+        // Even if profile fetch fails, we have valid tokens
+        // Create a basic user object from the email
+        const basicUser: User = {
+          id: 0,
+          email: credentials.email,
+        };
+
+        await Promise.all([
+          SecureStore.setItemAsync(TOKEN_KEY, JSON.stringify(tokens)),
+          SecureStore.setItemAsync(USER_KEY, JSON.stringify(basicUser)),
+        ]);
+
+        setState({
+          user: basicUser,
+          tokens,
+          isAuthenticated: true,
+          isLoading: false,
+        });
+
+        console.log('✅ AuthContext: Login successful (basic profile)');
+        return { success: true };
       }
 
       // Store tokens and user
@@ -163,6 +193,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading: false,
       });
 
+      console.log('✅ AuthContext: Login successful with full profile');
       return { success: true };
     } catch (error: any) {
       console.error('Login error:', error);
