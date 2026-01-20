@@ -24,10 +24,10 @@ export default function RootLayout() {
         >
           {/* Main Screens */}
           <Stack.Screen name="index" options={{ headerShown: false }} />
-          <Stack.Screen name="(routes)/login/index" options={{ headerShown: false }} />
-          <Stack.Screen name="(routes)/signup/index" options={{ headerShown: false }} />
-          <Stack.Screen name="(routes)/otp/index" options={{ headerShown: false }} />
-          <Stack.Screen name="(routes)/forgot-password/index" options={{ headerShown: false }} />
+          <Stack.Screen name="(routes)/login" options={{ headerShown: false }} />
+          <Stack.Screen name="(routes)/signup" options={{ headerShown: false }} />
+          <Stack.Screen name="(routes)/otp" options={{ headerShown: false }} />
+          <Stack.Screen name="(routes)/forgot-password" options={{ headerShown: false }} />
 
           {/* Tabs Navigation */}
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -50,39 +50,23 @@ export default function RootLayout() {
 
           {/* Shop/Browse Screen */}
           <Stack.Screen
-            name="screens/shop/index"
+            name="screens/shop"
             options={{
-              headerShown: true,
-              title: 'Shop',
-              headerStyle: {
-                backgroundColor: '#ffffff',
-              },
-              headerTintColor: '#2c4341',
-              headerTitleStyle: {
-                fontWeight: '600',
-              },
+              headerShown: false,
             }}
           />
 
           {/* All Categories Screen */}
           <Stack.Screen
-            name="screens/categories/index"
+            name="screens/categories"
             options={{
-              headerShown: true,
-              title: 'All Categories',
-              headerStyle: {
-                backgroundColor: '#ffffff',
-              },
-              headerTintColor: '#2c4341',
-              headerTitleStyle: {
-                fontWeight: '600',
-              },
+              headerShown: false,
             }}
           />
 
           {/* Checkout Screen */}
           <Stack.Screen
-            name="screens/checkout/index"
+            name="screens/checkout"
             options={{
               headerShown: true,
               title: 'Checkout',
@@ -98,13 +82,13 @@ export default function RootLayout() {
 
           {/* Order Screens */}
           <Stack.Screen
-            name="screens/order-success/index"
+            name="screens/order-success"
             options={{
               headerShown: false,
             }}
           />
           <Stack.Screen
-            name="screens/order-failed/index"
+            name="screens/order-failed"
             options={{
               headerShown: false,
             }}
@@ -125,19 +109,19 @@ export default function RootLayout() {
           />
 
           {/* Account Routes */}
-          <Stack.Screen name="(routes)/my-orders/index" options={{ headerShown: false }} />
-          <Stack.Screen name="(routes)/address/index" options={{ headerShown: false }} />
-          <Stack.Screen name="(routes)/payments/index" options={{ headerShown: false }} />
-          <Stack.Screen name="(routes)/personal-info/index" options={{ headerShown: false }} />
-          <Stack.Screen name="(routes)/security/index" options={{ headerShown: false }} />
-          <Stack.Screen name="(routes)/notifications/index" options={{ headerShown: false }} />
-          <Stack.Screen name="(routes)/help/index" options={{ headerShown: false }} />
-          <Stack.Screen name="(routes)/contact/index" options={{ headerShown: false }} />
-          <Stack.Screen name="(routes)/terms/index" options={{ headerShown: false }} />
+          <Stack.Screen name="(routes)/my-orders" options={{ headerShown: false }} />
+          <Stack.Screen name="(routes)/address" options={{ headerShown: false }} />
+          <Stack.Screen name="(routes)/payments" options={{ headerShown: false }} />
+          <Stack.Screen name="(routes)/personal-info" options={{ headerShown: false }} />
+          <Stack.Screen name="(routes)/security" options={{ headerShown: false }} />
+          <Stack.Screen name="(routes)/notifications" options={{ headerShown: false }} />
+          <Stack.Screen name="(routes)/help" options={{ headerShown: false }} />
+          <Stack.Screen name="(routes)/contact" options={{ headerShown: false }} />
+          <Stack.Screen name="(routes)/terms" options={{ headerShown: false }} />
 
           {/* Vendor Screens */}
           <Stack.Screen
-            name="screens/vendors/index"
+            name="screens/vendors"
             options={{
               headerShown: true,
               title: 'Vendors',
@@ -167,7 +151,7 @@ export default function RootLayout() {
 
           {/* Stores Screens */}
           <Stack.Screen
-            name="screens/stores/index"
+            name="screens/stores"
             options={{
               headerShown: false,
             }}
@@ -181,7 +165,7 @@ export default function RootLayout() {
 
           {/* Search Screen */}
           <Stack.Screen
-            name="screens/search/index"
+            name="screens/search"
             options={{
               headerShown: false,
               presentation: 'modal',

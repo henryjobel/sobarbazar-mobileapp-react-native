@@ -498,121 +498,332 @@ export async function getSubCategories(categoryId) {
 }
 
 // ==================== CART APIs ====================
-export async function getCart(token) {
-  const url = `${BASE_URL}/api/v1.0/customers/carts/`;
-  
-  console.log("🛒 Cart URL:", url);
-  
-  try {
-    const res = await fetch(url, {
-      headers: getHeaders(token),
-    });
-    
-    console.log("📊 Cart Status:", res.status);
-    
-    if (!res.ok) {
-      throw new Error('Failed to fetch cart');
-    }
-    
-    const data = await parseResponse(res);
-    console.log("✅ Cart Response:", data ? 'Received' : 'No data');
-    return data;
-  } catch (err) {
-    console.log("❌ Cart Error:", err.message);
-    return null;
-  }
-}
+// Backend cart system uses UUID-based cart_id
+// Cart items require variant_id (not product_id)
 
-export async function addToCart(productId, quantity, token) {
+// Create a new cart
+export async function createCart() {
   const url = `${BASE_URL}/api/v1.0/customers/carts/`;
-  
-  console.log("➕ Add to Cart URL:", url);
-  
+
+  console.log("🛒 Create Cart URL:", url);
+
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: getHeaders(token),
+      headers: getHeaders(),
+    });
+
+    console.log("📊 Create Cart Status:", res.status);
+
+    if (!res.ok) {
+      const errorData = await parseResponse(res);
+      console.log("❌ Create Cart Failed:", errorData);
+      throw new Error('Failed to create cart');
+    }
+
+    const data = await parseResponse(res);
+    console.log("✅ Create Cart Response:", JSON.stringify(data).substring(0, 300));
+
+    // Response: { id: "uuid", items: [], total_amount: 0, ... }
+    return data;
+  } catch (err) {
+    console.log("❌ Create Cart Error:", err.message);
+    return null;
+  }
+}
+
+// Get all carts (to find existing cart)
+export async function getCarts() {
+  const url = `${BASE_URL}/api/v1.0/customers/carts/`;
+
+  console.log("🛒 Get Carts URL:", url);
+
+  try {
+    const res = await fetch(url, {
+      headers: getHeaders(),
+    });
+
+    console.log("📊 Get Carts Status:", res.status);
+
+    if (!res.ok) {
+      throw new Error('Failed to fetch carts');
+    }
+
+    const json = await parseResponse(res);
+    console.log("✅ Get Carts Response:", JSON.stringify(json).substring(0, 300));
+
+    // Response: { data: [...] } or [...]
+    let carts = [];
+    if (json && json.data && Array.isArray(json.data)) {
+      carts = json.data;
+    } else if (Array.isArray(json)) {
+      carts = json;
+    }
+
+    return carts;
+  } catch (err) {
+    console.log("❌ Get Carts Error:", err.message);
+    return [];
+  }
+}
+
+// Get cart by ID
+export async function getCart(cartId) {
+  const url = `${BASE_URL}/api/v1.0/customers/carts/${cartId}/`;
+
+  console.log("🛒 Get Cart URL:", url);
+
+  try {
+    const res = await fetch(url, {
+      headers: getHeaders(),
+    });
+
+    console.log("📊 Get Cart Status:", res.status);
+
+    if (!res.ok) {
+      throw new Error('Failed to fetch cart');
+    }
+
+    const data = await parseResponse(res);
+    console.log("✅ Get Cart Response:", JSON.stringify(data).substring(0, 300));
+    return data;
+  } catch (err) {
+    console.log("❌ Get Cart Error:", err.message);
+    return null;
+  }
+}
+
+// Get or create cart - helper function
+export async function getOrCreateCart() {
+  console.log("🛒 Getting or creating cart...");
+
+  try {
+    // First try to get existing carts
+    const carts = await getCarts();
+
+    if (carts && carts.length > 0) {
+      // Return the most recent cart (first one)
+      console.log("✅ Found existing cart:", carts[0].id);
+      return carts[0];
+    }
+
+    // No existing cart, create a new one
+    console.log("🛒 No existing cart, creating new one...");
+    const newCart = await createCart();
+    return newCart;
+  } catch (err) {
+    console.log("❌ Get or Create Cart Error:", err.message);
+    return null;
+  }
+}
+
+// Add item to cart - requires variant_id
+export async function addToCart(cartId, variantId, quantity = 1) {
+  const url = `${BASE_URL}/api/v1.0/customers/carts/${cartId}/items/`;
+
+  console.log("➕ Add to Cart URL:", url);
+  console.log("➕ Add to Cart Data:", { variant_id: variantId, quantity });
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: getHeaders(),
       body: JSON.stringify({
-        product: productId,
+        variant_id: variantId,
         quantity: quantity,
       }),
     });
-    
+
     console.log("📊 Add to Cart Status:", res.status);
-    
+
     const data = await parseResponse(res);
-    console.log("✅ Add to Cart Response:", data);
-    return data;
+    console.log("✅ Add to Cart Response:", JSON.stringify(data).substring(0, 300));
+
+    if (!res.ok) {
+      console.log("❌ Add to Cart Failed:", data);
+      return { success: false, error: data?.error || 'Failed to add item' };
+    }
+
+    return { success: true, data };
   } catch (err) {
     console.log("❌ Add to Cart Error:", err.message);
-    return null;
+    return { success: false, error: err.message };
   }
 }
 
-export async function updateCartItem(cartItemId, quantity, token) {
-  const url = `${BASE_URL}/api/v1.0/customers/carts/items/${cartItemId}/`;
-  
-  console.log("✏️ Update Cart URL:", url);
-  
+// Get cart items
+export async function getCartItems(cartId) {
+  const url = `${BASE_URL}/api/v1.0/customers/carts/${cartId}/items/`;
+
+  console.log("🛒 Get Cart Items URL:", url);
+
+  try {
+    const res = await fetch(url, {
+      headers: getHeaders(),
+    });
+
+    console.log("📊 Get Cart Items Status:", res.status);
+
+    if (!res.ok) {
+      throw new Error('Failed to fetch cart items');
+    }
+
+    const json = await parseResponse(res);
+    console.log("✅ Get Cart Items Response:", JSON.stringify(json).substring(0, 300));
+
+    let items = [];
+    if (json && json.data && Array.isArray(json.data)) {
+      items = json.data;
+    } else if (Array.isArray(json)) {
+      items = json;
+    }
+
+    return items;
+  } catch (err) {
+    console.log("❌ Get Cart Items Error:", err.message);
+    return [];
+  }
+}
+
+// Update cart item quantity
+export async function updateCartItem(cartId, itemId, quantity) {
+  const url = `${BASE_URL}/api/v1.0/customers/carts/${cartId}/items/${itemId}/`;
+
+  console.log("✏️ Update Cart Item URL:", url);
+  console.log("✏️ Update Cart Item Data:", { quantity });
+
   try {
     const res = await fetch(url, {
       method: 'PATCH',
-      headers: getHeaders(token),
+      headers: getHeaders(),
       body: JSON.stringify({ quantity }),
     });
-    
-    console.log("📊 Update Cart Status:", res.status);
-    
+
+    console.log("📊 Update Cart Item Status:", res.status);
+
     const data = await parseResponse(res);
-    console.log("✅ Update Cart Response:", data);
-    return data;
+    console.log("✅ Update Cart Item Response:", JSON.stringify(data).substring(0, 300));
+
+    if (!res.ok) {
+      return { success: false, error: data?.error || 'Failed to update item' };
+    }
+
+    return { success: true, data };
   } catch (err) {
-    console.log("❌ Update Cart Error:", err.message);
-    return null;
+    console.log("❌ Update Cart Item Error:", err.message);
+    return { success: false, error: err.message };
   }
 }
 
-export async function removeFromCart(cartItemId, token) {
-  const url = `${BASE_URL}/api/v1.0/customers/carts/items/${cartItemId}/`;
-  
+// Remove item from cart
+export async function removeFromCart(cartId, itemId) {
+  const url = `${BASE_URL}/api/v1.0/customers/carts/${cartId}/items/${itemId}/`;
+
   console.log("🗑️ Remove from Cart URL:", url);
-  
+
   try {
     const res = await fetch(url, {
       method: 'DELETE',
-      headers: getHeaders(token),
+      headers: getHeaders(),
     });
-    
+
     console.log("📊 Remove from Cart Status:", res.status);
-    
-    return res.ok;
+
+    if (res.status === 204 || res.ok) {
+      return { success: true };
+    }
+
+    const data = await parseResponse(res);
+    return { success: false, error: data?.error || 'Failed to remove item' };
   } catch (err) {
     console.log("❌ Remove from Cart Error:", err.message);
-    return false;
+    return { success: false, error: err.message };
+  }
+}
+
+// Clear all items from cart
+export async function clearCart(cartId) {
+  console.log("🗑️ Clearing cart:", cartId);
+
+  try {
+    const items = await getCartItems(cartId);
+
+    for (const item of items) {
+      await removeFromCart(cartId, item.id);
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.log("❌ Clear Cart Error:", err.message);
+    return { success: false, error: err.message };
   }
 }
 
 // ==================== ORDER APIs ====================
-export async function createOrder(orderData, token) {
+// Backend requires: cart_id, payment_method (COD/OP), area (IN/OUT)
+// For guests: also requires name, email, phone, shipping_address
+
+export async function createOrder(orderData, token = null) {
   const url = `${BASE_URL}/api/v1.0/customers/orders/`;
-  
+
   console.log("📦 Create Order URL:", url);
-  
+  console.log("📦 Create Order Data:", JSON.stringify(orderData).substring(0, 500));
+
   try {
+    // Build the order payload based on backend requirements
+    const payload = {
+      cart_id: orderData.cart_id,
+      payment_method: orderData.payment_method || 'COD', // COD or OP
+      area: orderData.area || 'IN', // IN (Inside Dhaka) or OUT (Outside Dhaka)
+    };
+
+    // For guest orders, add guest fields
+    if (!token || orderData.is_guest) {
+      payload.name = orderData.name || orderData.guest_name;
+      payload.email = orderData.email || orderData.guest_email;
+      payload.phone = orderData.phone || orderData.guest_phone;
+      payload.shipping_address = orderData.shipping_address;
+    }
+
+    console.log("📦 Order Payload:", JSON.stringify(payload));
+
     const res = await fetch(url, {
       method: 'POST',
       headers: getHeaders(token),
-      body: JSON.stringify(orderData),
+      body: JSON.stringify(payload),
     });
-    
+
     console.log("📊 Create Order Status:", res.status);
-    
+
     const data = await parseResponse(res);
-    console.log("✅ Create Order Response:", data);
-    return data;
+    console.log("✅ Create Order Response:", JSON.stringify(data).substring(0, 500));
+
+    if (!res.ok) {
+      console.log("❌ Create Order Failed:", data);
+      return {
+        success: false,
+        error: data?.error || data?.detail || 'Failed to create order',
+      };
+    }
+
+    // If online payment, response contains GatewayPageURL
+    if (data && data.GatewayPageURL) {
+      return {
+        success: true,
+        payment_url: data.GatewayPageURL,
+        data,
+      };
+    }
+
+    // COD order - return order data
+    return {
+      success: true,
+      order: data,
+      order_id: data?.id,
+    };
   } catch (err) {
     console.log("❌ Create Order Error:", err.message);
-    return null;
+    return { success: false, error: err.message };
   }
 }
 
@@ -712,24 +923,32 @@ export async function getFavorites(token) {
 
 export async function addToFavorites(productId, token) {
   const url = `${BASE_URL}/api/v1.0/customers/favorite-products/`;
-  
+
   console.log("➕ Add Favorite URL:", url);
-  
+
   try {
     const res = await fetch(url, {
       method: 'POST',
       headers: getHeaders(token),
-      body: JSON.stringify({ product: productId }),
+      body: JSON.stringify({
+        product: productId,
+        is_favorite: true,
+      }),
     });
-    
+
     console.log("📊 Add Favorite Status:", res.status);
-    
+
     const data = await parseResponse(res);
     console.log("✅ Add Favorite Response:", data);
-    return data;
+
+    if (!res.ok) {
+      return { success: false, error: data?.error || 'Failed to add to favorites' };
+    }
+
+    return { success: true, data };
   } catch (err) {
     console.log("❌ Add Favorite Error:", err.message);
-    return null;
+    return { success: false, error: err.message };
   }
 }
 
@@ -1218,39 +1437,44 @@ export async function updateUserProfile(userData, token) {
 export default {
   // Test
   testApiConnection,
-  
+
   // Auth
   loginUser,
   registerUser,
   getUserProfile,
   updateUserProfile,
-  
+
   // Products
   getProducts,
   getProductById,
   getProductsByCategory,
   searchProducts,
-  
+
   // Categories
   getCategories,
   getSubCategories,
-  
-  // Cart
+
+  // Cart (Updated for backend compatibility)
+  createCart,
+  getCarts,
   getCart,
+  getOrCreateCart,
   addToCart,
+  getCartItems,
   updateCartItem,
   removeFromCart,
-  
+  clearCart,
+
   // Orders
   createOrder,
   getOrders,
   getOrderById,
-  
+
   // Favorites
   getFavorites,
   addToFavorites,
   removeFromFavorites,
-  
+
   // Home & Base
   getHomePageData,
   getNavbarData,

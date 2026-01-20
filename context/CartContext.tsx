@@ -1,38 +1,73 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
 import * as SecureStore from 'expo-secure-store';
-import { useAuth } from './AuthContext';
-import { getCart, addToCart, updateCartItem, removeFromCart, createOrder } from '@/utils/api';
+import {
+  createCart,
+  getCart,
+  getOrCreateCart,
+  addToCart as apiAddToCart,
+  getCartItems,
+  updateCartItem as apiUpdateCartItem,
+  removeFromCart as apiRemoveFromCart,
+  clearCart as apiClearCart,
+  createOrder as apiCreateOrder,
+} from '@/utils/api';
 
-// Types
+// Types matching backend structure
 interface ProductVariant {
   id: number;
   name: string;
-  price: number;
-  image?: string;
   sku?: string;
+  price: number;
+  stock: number;
+  available_stock: number;
+  is_default: boolean;
+  final_price: number;
+  discount?: {
+    name: string;
+    type: string;
+    value: number;
+    is_percentage: boolean;
+  };
+  attributes?: string;
+  image?: string;
+}
+
+interface CartItemVariant {
+  id: number;
+  name: string;
+  sku?: string;
+  price: number;
+  stock: number;
+  available_stock: number;
+  is_default: boolean;
+  final_price: number;
+  discount?: any;
+  attributes?: string;
+  image?: string;
 }
 
 interface CartItem {
-  id: number;
-  product_id: number;
-  variant_id?: number;
-  name: string;
-  price: number;
+  id: number; // Cart item ID from backend
+  variant: CartItemVariant;
   quantity: number;
-  image?: string;
-  variant?: ProductVariant;
-  stock?: number;
+  total_price: number;
+  discounted_price: number;
+  // Additional fields for UI
+  product_id?: number;
+  product_name?: string;
+  product_image?: string;
 }
 
 interface Cart {
-  id?: string;
+  id: string; // UUID from backend
   items: CartItem[];
-  subtotal: number;
+  total_amount: number;
+  coupon_discount: number;
+  discounted_price: number;
   discount: number;
-  shipping: number;
-  total: number;
-  coupon_code?: string;
-  coupon_discount?: number;
+  subtotal: number;
+  delivery_charge_inside_dhaka: number;
+  delivery_charge_outside_dhaka: number;
 }
 
 interface ShippingAddress {
@@ -40,362 +75,344 @@ interface ShippingAddress {
   phone: string;
   email?: string;
   address: string;
-  city: string;
+  city?: string;
   area: 'IN' | 'OUT'; // Inside or Outside Dhaka
   postal_code?: string;
 }
 
 interface OrderData {
   shipping_address: ShippingAddress;
-  payment_method: 'COD' | 'OP'; // Cash on Delivery or Online Payment
+  payment_method: 'COD' | 'OP';
   notes?: string;
 }
 
 interface CartContextType {
-  cart: Cart;
+  cart: Cart | null;
+  cartId: string | null;
   isLoading: boolean;
   itemCount: number;
+  subtotal: number;
+  total: number;
+  deliveryCharge: number;
+  shippingArea: 'IN' | 'OUT';
   addItem: (product: any, quantity?: number, variant?: any) => Promise<boolean>;
   updateQuantity: (itemId: number, quantity: number) => Promise<boolean>;
   removeItem: (itemId: number) => Promise<boolean>;
   clearCart: () => Promise<void>;
-  applyCoupon: (code: string) => Promise<{ success: boolean; error?: string }>;
-  removeCoupon: () => void;
-  checkout: (orderData: OrderData) => Promise<{ success: boolean; orderId?: string; error?: string }>;
+  checkout: (orderData: OrderData) => Promise<{ success: boolean; orderId?: string; payment_url?: string; error?: string }>;
   refreshCart: () => Promise<void>;
   setShippingArea: (area: 'IN' | 'OUT') => void;
-  shippingArea: 'IN' | 'OUT';
+  initializeCart: () => Promise<void>;
 }
 
 // Create Context
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 // Storage Keys
-const CART_KEY = 'shopping_cart';
 const CART_ID_KEY = 'cart_id';
-
-// Shipping rates
-const SHIPPING_RATES = {
-  IN: 60,  // Inside Dhaka
-  OUT: 120, // Outside Dhaka
-};
 
 // Provider Component
 export function CartProvider({ children }: { children: ReactNode }) {
-  const { tokens, isAuthenticated } = useAuth();
-  const [cart, setCart] = useState<Cart>({
-    items: [],
-    subtotal: 0,
-    discount: 0,
-    shipping: SHIPPING_RATES.IN,
-    total: 0,
-  });
+  const [cart, setCart] = useState<Cart | null>(null);
+  const [cartId, setCartId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [shippingArea, setShippingAreaState] = useState<'IN' | 'OUT'>('IN');
 
-  // Calculate totals
-  const calculateTotals = (items: CartItem[], discount: number = 0, couponDiscount: number = 0): Cart => {
-    const subtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const shipping = items.length > 0 ? SHIPPING_RATES[shippingArea] : 0;
-    const totalDiscount = discount + couponDiscount;
-    const total = Math.max(0, subtotal - totalDiscount + shipping);
+  // Calculate derived values
+  const itemCount = cart?.items?.reduce((sum, item) => sum + item.quantity, 0) || 0;
+  const subtotal = cart?.subtotal || cart?.total_amount || 0;
+  const deliveryCharge = shippingArea === 'IN'
+    ? (cart?.delivery_charge_inside_dhaka || 60)
+    : (cart?.delivery_charge_outside_dhaka || 120);
+  const total = subtotal - (cart?.coupon_discount || 0) + deliveryCharge;
 
-    return {
-      ...cart,
-      items,
-      subtotal,
-      discount: totalDiscount,
-      shipping,
-      total,
-    };
-  };
-
-  // Load cart on mount and auth change
+  // Initialize cart on mount
   useEffect(() => {
-    loadCart();
-  }, [isAuthenticated, tokens]);
+    initializeCart();
+  }, []);
 
-  const loadCart = async () => {
+  const initializeCart = useCallback(async () => {
     try {
       setIsLoading(true);
+      console.log('🛒 CartContext: Initializing cart...');
 
-      if (isAuthenticated && tokens?.access) {
-        // Fetch cart from server
-        const serverCart = await getCart(tokens.access);
-        if (serverCart && serverCart.items) {
-          const newCart = calculateTotals(serverCart.items, 0, serverCart.coupon_discount || 0);
-          newCart.id = serverCart.id;
-          newCart.coupon_code = serverCart.coupon_code;
-          newCart.coupon_discount = serverCart.coupon_discount;
+      // Check for stored cart ID
+      const storedCartId = await SecureStore.getItemAsync(CART_ID_KEY);
+
+      if (storedCartId) {
+        console.log('🛒 CartContext: Found stored cart ID:', storedCartId);
+        // Try to fetch the existing cart
+        const existingCart = await getCart(storedCartId);
+
+        if (existingCart && existingCart.id) {
+          console.log('✅ CartContext: Loaded existing cart with', existingCart.items?.length || 0, 'items');
+          setCart(existingCart);
+          setCartId(existingCart.id);
+          return;
+        }
+      }
+
+      // No valid stored cart, create or get a new one
+      console.log('🛒 CartContext: Getting or creating new cart...');
+      const newCart = await getOrCreateCart();
+
+      if (newCart && newCart.id) {
+        console.log('✅ CartContext: Got cart:', newCart.id);
+        await SecureStore.setItemAsync(CART_ID_KEY, newCart.id);
+        setCart(newCart);
+        setCartId(newCart.id);
+      } else {
+        console.log('⚠️ CartContext: Could not get/create cart');
+      }
+    } catch (error) {
+      console.error('❌ CartContext: Initialize error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const refreshCart = useCallback(async () => {
+    if (!cartId) {
+      await initializeCart();
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      console.log('🔄 CartContext: Refreshing cart:', cartId);
+
+      const updatedCart = await getCart(cartId);
+
+      if (updatedCart && updatedCart.id) {
+        console.log('✅ CartContext: Cart refreshed with', updatedCart.items?.length || 0, 'items');
+        setCart(updatedCart);
+      }
+    } catch (error) {
+      console.error('❌ CartContext: Refresh error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [cartId, initializeCart]);
+
+  const addItem = useCallback(async (product: any, quantity: number = 1, variant?: any): Promise<boolean> => {
+    try {
+      setIsLoading(true);
+      console.log('➕ CartContext: Adding item to cart...');
+
+      // Ensure we have a cart
+      let currentCartId = cartId;
+      if (!currentCartId) {
+        console.log('🛒 CartContext: No cart, creating one...');
+        const newCart = await getOrCreateCart();
+        if (newCart && newCart.id) {
+          await SecureStore.setItemAsync(CART_ID_KEY, newCart.id);
           setCart(newCart);
-        }
-      } else {
-        // Load from local storage for guests
-        const storedCart = await SecureStore.getItemAsync(CART_KEY);
-        if (storedCart) {
-          const parsed = JSON.parse(storedCart);
-          setCart(calculateTotals(parsed.items || [], 0, 0));
-        }
-      }
-    } catch (error) {
-      console.error('Load cart error:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const saveLocalCart = async (items: CartItem[]) => {
-    const newCart = calculateTotals(items);
-    await SecureStore.setItemAsync(CART_KEY, JSON.stringify(newCart));
-  };
-
-  const addItem = async (product: any, quantity: number = 1, variant?: any): Promise<boolean> => {
-    try {
-      setIsLoading(true);
-
-      const newItem: CartItem = {
-        id: Date.now(), // Temporary ID for local cart
-        product_id: product.id,
-        variant_id: variant?.id,
-        name: product.name || product.title,
-        price: variant?.price || product.price || product.variants?.[0]?.price || 0,
-        quantity,
-        image: product.image || product.images?.[0]?.image || product.feature_image,
-        variant,
-        stock: variant?.stock || product.stock,
-      };
-
-      if (isAuthenticated && tokens?.access) {
-        // Add to server cart
-        const response = await addToCart(product.id, quantity, tokens.access);
-        if (response) {
-          await loadCart(); // Refresh cart from server
-          return true;
-        }
-        return false;
-      } else {
-        // Add to local cart
-        const existingIndex = cart.items.findIndex(
-          item => item.product_id === product.id && item.variant_id === variant?.id
-        );
-
-        let updatedItems: CartItem[];
-        if (existingIndex >= 0) {
-          updatedItems = cart.items.map((item, index) =>
-            index === existingIndex
-              ? { ...item, quantity: item.quantity + quantity }
-              : item
-          );
+          setCartId(newCart.id);
+          currentCartId = newCart.id;
         } else {
-          updatedItems = [...cart.items, newItem];
+          console.error('❌ CartContext: Failed to create cart');
+          return false;
         }
-
-        const newCart = calculateTotals(updatedItems);
-        setCart(newCart);
-        await saveLocalCart(updatedItems);
-        return true;
       }
-    } catch (error) {
-      console.error('Add item error:', error);
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
-  const updateQuantity = async (itemId: number, quantity: number): Promise<boolean> => {
-    try {
-      if (quantity < 1) return false;
+      // Get the variant ID
+      // Backend requires variant_id, not product_id
+      let variantId: number;
 
-      setIsLoading(true);
-
-      if (isAuthenticated && tokens?.access) {
-        const response = await updateCartItem(itemId, quantity, tokens.access);
-        if (response) {
-          await loadCart();
-          return true;
-        }
-        return false;
+      if (variant && variant.id) {
+        variantId = variant.id;
+      } else if (product.default_variant && product.default_variant.id) {
+        variantId = product.default_variant.id;
+      } else if (product.variants && product.variants.length > 0 && product.variants[0].id) {
+        variantId = product.variants[0].id;
+      } else if (product.variant_id) {
+        variantId = product.variant_id;
       } else {
-        const updatedItems = cart.items.map(item =>
-          item.id === itemId ? { ...item, quantity } : item
-        );
-        const newCart = calculateTotals(updatedItems);
-        setCart(newCart);
-        await saveLocalCart(updatedItems);
-        return true;
-      }
-    } catch (error) {
-      console.error('Update quantity error:', error);
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const removeItem = async (itemId: number): Promise<boolean> => {
-    try {
-      setIsLoading(true);
-
-      if (isAuthenticated && tokens?.access) {
-        const success = await removeFromCart(itemId, tokens.access);
-        if (success) {
-          await loadCart();
-          return true;
-        }
+        console.error('❌ CartContext: No variant ID found for product:', product.name || product.id);
+        // If no variant, we can't add to cart with this backend
         return false;
-      } else {
-        const updatedItems = cart.items.filter(item => item.id !== itemId);
-        const newCart = calculateTotals(updatedItems);
-        setCart(newCart);
-        await saveLocalCart(updatedItems);
+      }
+
+      console.log('➕ CartContext: Adding variant', variantId, 'to cart', currentCartId);
+
+      const result = await apiAddToCart(currentCartId, variantId, quantity);
+
+      if (result.success) {
+        console.log('✅ CartContext: Item added successfully');
+        await refreshCart();
         return true;
+      } else {
+        console.error('❌ CartContext: Failed to add item:', result.error);
+        return false;
       }
     } catch (error) {
-      console.error('Remove item error:', error);
+      console.error('❌ CartContext: Add item error:', error);
       return false;
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [cartId, refreshCart]);
 
-  const clearCart = async () => {
+  const updateQuantity = useCallback(async (itemId: number, quantity: number): Promise<boolean> => {
+    if (!cartId || quantity < 1) return false;
+
     try {
       setIsLoading(true);
+      console.log('✏️ CartContext: Updating item', itemId, 'quantity to', quantity);
 
-      if (isAuthenticated && tokens?.access) {
-        // Remove all items from server cart
-        for (const item of cart.items) {
-          await removeFromCart(item.id, tokens.access);
-        }
+      const result = await apiUpdateCartItem(cartId, itemId, quantity);
+
+      if (result.success) {
+        console.log('✅ CartContext: Quantity updated');
+        await refreshCart();
+        return true;
+      } else {
+        console.error('❌ CartContext: Failed to update quantity:', result.error);
+        return false;
       }
-
-      setCart({
-        items: [],
-        subtotal: 0,
-        discount: 0,
-        shipping: 0,
-        total: 0,
-      });
-      await SecureStore.deleteItemAsync(CART_KEY);
     } catch (error) {
-      console.error('Clear cart error:', error);
+      console.error('❌ CartContext: Update quantity error:', error);
+      return false;
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [cartId, refreshCart]);
 
-  const applyCoupon = async (code: string): Promise<{ success: boolean; error?: string }> => {
-    // This would typically call an API to validate the coupon
-    // For now, we'll just store it
+  const removeItem = useCallback(async (itemId: number): Promise<boolean> => {
+    if (!cartId) return false;
+
     try {
-      setCart(prev => ({
-        ...prev,
-        coupon_code: code,
-        coupon_discount: 0, // Would be calculated by server
-      }));
-      return { success: true };
-    } catch (error: any) {
-      return { success: false, error: error.message };
+      setIsLoading(true);
+      console.log('🗑️ CartContext: Removing item', itemId);
+
+      const result = await apiRemoveFromCart(cartId, itemId);
+
+      if (result.success) {
+        console.log('✅ CartContext: Item removed');
+        await refreshCart();
+        return true;
+      } else {
+        console.error('❌ CartContext: Failed to remove item:', result.error);
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ CartContext: Remove item error:', error);
+      return false;
+    } finally {
+      setIsLoading(false);
     }
-  };
+  }, [cartId, refreshCart]);
 
-  const removeCoupon = () => {
-    setCart(prev => ({
-      ...prev,
-      coupon_code: undefined,
-      coupon_discount: 0,
-      total: prev.subtotal - prev.discount + prev.shipping,
-    }));
-  };
+  const clearCartItems = useCallback(async () => {
+    if (!cartId) return;
 
-  const setShippingArea = (area: 'IN' | 'OUT') => {
+    try {
+      setIsLoading(true);
+      console.log('🗑️ CartContext: Clearing cart');
+
+      await apiClearCart(cartId);
+
+      // Create a new cart after clearing
+      const newCart = await createCart();
+      if (newCart && newCart.id) {
+        await SecureStore.setItemAsync(CART_ID_KEY, newCart.id);
+        setCart(newCart);
+        setCartId(newCart.id);
+      }
+    } catch (error) {
+      console.error('❌ CartContext: Clear cart error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [cartId]);
+
+  const setShippingArea = useCallback((area: 'IN' | 'OUT') => {
     setShippingAreaState(area);
-    const newShipping = cart.items.length > 0 ? SHIPPING_RATES[area] : 0;
-    setCart(prev => ({
-      ...prev,
-      shipping: newShipping,
-      total: prev.subtotal - prev.discount + newShipping,
-    }));
-  };
+  }, []);
 
-  const checkout = async (orderData: OrderData): Promise<{ success: boolean; orderId?: string; error?: string }> => {
+  const checkout = useCallback(async (orderData: OrderData): Promise<{ success: boolean; orderId?: string; payment_url?: string; error?: string }> => {
+    if (!cartId) {
+      return { success: false, error: 'No cart found' };
+    }
+
+    if (!cart?.items || cart.items.length === 0) {
+      return { success: false, error: 'Cart is empty' };
+    }
+
     try {
       setIsLoading(true);
-
-      if (cart.items.length === 0) {
-        return { success: false, error: 'Cart is empty' };
-      }
+      console.log('📦 CartContext: Creating order...');
 
       const orderPayload = {
-        items: cart.items.map(item => ({
-          product: item.product_id,
-          variant: item.variant_id,
-          quantity: item.quantity,
-        })),
-        shipping_address: orderData.shipping_address,
+        cart_id: cartId,
         payment_method: orderData.payment_method,
-        shipping_area: shippingArea,
-        notes: orderData.notes,
-        subtotal: cart.subtotal,
-        shipping_cost: cart.shipping,
-        discount: cart.discount,
-        total: cart.total,
-        coupon_code: cart.coupon_code,
+        area: orderData.shipping_address.area,
+        // Guest fields
+        name: orderData.shipping_address.name,
+        email: orderData.shipping_address.email,
+        phone: orderData.shipping_address.phone,
+        shipping_address: orderData.shipping_address.address,
+        is_guest: true, // For now, treat all as guest
       };
 
-      if (isAuthenticated && tokens?.access) {
-        const response = await createOrder(orderPayload, tokens.access);
-        if (response && response.id) {
-          await clearCart();
-          return { success: true, orderId: response.id.toString() };
-        }
-        return { success: false, error: 'Failed to create order' };
-      } else {
-        // Guest checkout - would need different API endpoint
-        const response = await createOrder({
-          ...orderPayload,
-          guest_email: orderData.shipping_address.email,
-          guest_phone: orderData.shipping_address.phone,
-          guest_name: orderData.shipping_address.name,
-        }, '');
+      console.log('📦 CartContext: Order payload:', orderPayload);
 
-        if (response && response.id) {
-          await clearCart();
-          return { success: true, orderId: response.id.toString() };
+      const result = await apiCreateOrder(orderPayload, null);
+
+      if (result.success) {
+        console.log('✅ CartContext: Order created successfully');
+
+        // If online payment, return payment URL
+        if (result.payment_url) {
+          return {
+            success: true,
+            payment_url: result.payment_url,
+          };
         }
-        return { success: false, error: 'Failed to create order' };
+
+        // COD order - clear cart and return order ID
+        const orderId = result.order_id?.toString() || result.order?.id?.toString();
+
+        // Create new cart after successful order
+        const newCart = await createCart();
+        if (newCart && newCart.id) {
+          await SecureStore.setItemAsync(CART_ID_KEY, newCart.id);
+          setCart(newCart);
+          setCartId(newCart.id);
+        }
+
+        return { success: true, orderId };
+      } else {
+        console.error('❌ CartContext: Order failed:', result.error);
+        return { success: false, error: result.error || 'Failed to create order' };
       }
     } catch (error: any) {
-      console.error('Checkout error:', error);
+      console.error('❌ CartContext: Checkout error:', error);
       return { success: false, error: error.message || 'Checkout failed' };
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const refreshCart = async () => {
-    await loadCart();
-  };
-
-  const itemCount = cart.items.reduce((sum, item) => sum + item.quantity, 0);
+  }, [cartId, cart]);
 
   return (
     <CartContext.Provider
       value={{
         cart,
+        cartId,
         isLoading,
         itemCount,
+        subtotal,
+        total,
+        deliveryCharge,
+        shippingArea,
         addItem,
         updateQuantity,
         removeItem,
-        clearCart,
-        applyCoupon,
-        removeCoupon,
+        clearCart: clearCartItems,
         checkout,
         refreshCart,
         setShippingArea,
-        shippingArea,
+        initializeCart,
       }}
     >
       {children}
@@ -406,8 +423,29 @@ export function CartProvider({ children }: { children: ReactNode }) {
 // Custom Hook
 export function useCart() {
   const context = useContext(CartContext);
+
+  // Return a safe fallback if context is not available
+  // This prevents errors when component is used outside provider
   if (context === undefined) {
-    throw new Error('useCart must be used within a CartProvider');
+    console.warn('useCart: Context not available, using fallback');
+    return {
+      cart: null,
+      cartId: null,
+      isLoading: false,
+      itemCount: 0,
+      subtotal: 0,
+      total: 0,
+      deliveryCharge: 60,
+      shippingArea: 'IN' as const,
+      addItem: async () => false,
+      updateQuantity: async () => false,
+      removeItem: async () => false,
+      clearCart: async () => {},
+      checkout: async () => ({ success: false, error: 'Context not available' }),
+      refreshCart: async () => {},
+      setShippingArea: () => {},
+      initializeCart: async () => {},
+    };
   }
   return context;
 }

@@ -209,8 +209,22 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
 // Custom Hook
 export function useWishlist() {
   const context = useContext(WishlistContext);
+
+  // Return a safe fallback if context is not available
+  // This prevents errors when component is used outside provider
   if (context === undefined) {
-    throw new Error('useWishlist must be used within a WishlistProvider');
+    console.warn('useWishlist: Context not available, using fallback');
+    return {
+      items: [],
+      isLoading: false,
+      itemCount: 0,
+      addToWishlist: async () => false,
+      removeFromWishlist: async () => false,
+      isInWishlist: () => false,
+      toggleWishlist: async () => false,
+      clearWishlist: async () => {},
+      refreshWishlist: async () => {},
+    };
   }
   return context;
 }

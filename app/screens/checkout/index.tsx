@@ -4,8 +4,8 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Image,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
@@ -34,7 +35,18 @@ interface ShippingAddress {
 export default function CheckoutScreen() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
-  const { cart, checkout, shippingArea, setShippingArea, isLoading } = useCart();
+  const {
+    cart,
+    checkout,
+    shippingArea,
+    setShippingArea,
+    isLoading,
+    subtotal,
+    total,
+    deliveryCharge,
+  } = useCart();
+
+  const cartItems = cart?.items || [];
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('COD');
   const [notes, setNotes] = useState('');
@@ -46,7 +58,7 @@ export default function CheckoutScreen() {
     email: user?.email || '',
     address: '',
     city: '',
-    area: 'IN',
+    area: shippingArea,
     postal_code: '',
   });
 
@@ -59,15 +71,14 @@ export default function CheckoutScreen() {
     if (!address.phone) {
       newErrors.phone = 'Phone is required';
     } else if (!/^01[3-9]\d{8}$/.test(address.phone.replace(/\s/g, ''))) {
-      newErrors.phone = 'Invalid phone number';
+      newErrors.phone = 'Invalid phone number (e.g., 01712345678)';
     }
-    if (!isAuthenticated && !address.email) {
-      newErrors.email = 'Email is required for guest checkout';
-    } else if (address.email && !/\S+@\S+\.\S+/.test(address.email)) {
+    if (!address.email) {
+      newErrors.email = 'Email is required';
+    } else if (!/\S+@\S+\.\S+/.test(address.email)) {
       newErrors.email = 'Invalid email address';
     }
     if (!address.address.trim()) newErrors.address = 'Address is required';
-    if (!address.city.trim()) newErrors.city = 'City is required';
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -79,34 +90,49 @@ export default function CheckoutScreen() {
       return;
     }
 
-    if (cart.items.length === 0) {
+    if (cartItems.length === 0) {
       Alert.alert('Error', 'Your cart is empty');
       return;
     }
 
     setIsSubmitting(true);
 
-    const result = await checkout({
-      shipping_address: {
-        ...address,
-        area: shippingArea,
-      },
-      payment_method: paymentMethod,
-      notes,
-    });
-
-    setIsSubmitting(false);
-
-    if (result.success) {
-      router.replace({
-        pathname: '/screens/order-success',
-        params: { orderId: result.orderId },
+    try {
+      const result = await checkout({
+        shipping_address: {
+          name: address.name,
+          phone: address.phone,
+          email: address.email,
+          address: address.address + (address.city ? ', ' + address.city : ''),
+          area: shippingArea,
+        },
+        payment_method: paymentMethod,
+        notes,
       });
-    } else {
-      router.replace({
-        pathname: '/screens/order-failed',
-        params: { error: result.error },
-      });
+
+      setIsSubmitting(false);
+
+      if (result.success) {
+        // If online payment, open payment URL
+        if (result.payment_url) {
+          Linking.openURL(result.payment_url);
+          return;
+        }
+
+        // COD order success
+        router.replace({
+          pathname: '/screens/order-success',
+          params: { orderId: result.orderId || '' },
+        });
+      } else {
+        router.replace({
+          pathname: '/screens/order-failed',
+          params: { error: result.error || 'Order failed' },
+        });
+      }
+    } catch (error: any) {
+      setIsSubmitting(false);
+      Alert.alert('Error', error.message || 'Failed to place order');
     }
   };
 
@@ -117,7 +143,22 @@ export default function CheckoutScreen() {
     }
   };
 
-  if (cart.items.length === 0) {
+  // Get display values from cart item
+  const getItemImage = (item: any): string => {
+    if (item.variant?.image) return item.variant.image;
+    if (item.product_image) return item.product_image;
+    return 'https://via.placeholder.com/60';
+  };
+
+  const getItemName = (item: any): string => {
+    return item.variant?.name || item.product_name || 'Product';
+  };
+
+  const getItemPrice = (item: any): number => {
+    return item.variant?.final_price || item.variant?.price || item.discounted_price || 0;
+  };
+
+  if (cartItems.length === 0) {
     return (
       <SafeAreaView style={styles.emptyContainer}>
         <Ionicons name="cart-outline" size={80} color="#D1D5DB" />
@@ -143,17 +184,20 @@ export default function CheckoutScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Order Summary</Text>
           <View style={styles.orderItems}>
-            {cart.items.map((item) => (
+            {cartItems.map((item) => (
               <View key={item.id} style={styles.orderItem}>
                 <Image
-                  source={{ uri: item.image || 'https://via.placeholder.com/60' }}
+                  source={{ uri: getItemImage(item) }}
                   style={styles.itemImage}
+                  contentFit="cover"
                 />
                 <View style={styles.itemInfo}>
-                  <Text style={styles.itemName} numberOfLines={2}>{item.name}</Text>
-                  <Text style={styles.itemVariant}>{item.variant?.name}</Text>
+                  <Text style={styles.itemName} numberOfLines={2}>{getItemName(item)}</Text>
+                  {item.variant?.attributes && (
+                    <Text style={styles.itemVariant}>{item.variant.attributes}</Text>
+                  )}
                   <View style={styles.itemBottom}>
-                    <Text style={styles.itemPrice}>৳{item.price}</Text>
+                    <Text style={styles.itemPrice}>৳{getItemPrice(item).toLocaleString()}</Text>
                     <Text style={styles.itemQty}>x{item.quantity}</Text>
                   </View>
                 </View>
@@ -184,7 +228,7 @@ export default function CheckoutScreen() {
               <Text style={styles.phonePrefix}>+880</Text>
               <TextInput
                 style={styles.phoneInput}
-                placeholder="1XXXXXXXXX"
+                placeholder="1712345678"
                 value={address.phone}
                 onChangeText={(text) => updateAddress('phone', text.replace(/\D/g, '').slice(0, 11))}
                 keyboardType="phone-pad"
@@ -194,27 +238,25 @@ export default function CheckoutScreen() {
             {errors.phone && <Text style={styles.errorText}>{errors.phone}</Text>}
           </View>
 
-          {!isAuthenticated && (
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Email Address *</Text>
-              <TextInput
-                style={[styles.input, errors.email && styles.inputError]}
-                placeholder="Enter your email"
-                value={address.email}
-                onChangeText={(text) => updateAddress('email', text)}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                editable={!isSubmitting}
-              />
-              {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
-            </View>
-          )}
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Email Address *</Text>
+            <TextInput
+              style={[styles.input, errors.email && styles.inputError]}
+              placeholder="Enter your email"
+              value={address.email}
+              onChangeText={(text) => updateAddress('email', text)}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              editable={!isSubmitting}
+            />
+            {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
+          </View>
 
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Full Address *</Text>
             <TextInput
               style={[styles.input, styles.textArea, errors.address && styles.inputError]}
-              placeholder="House, Road, Area"
+              placeholder="House, Road, Area, City"
               value={address.address}
               onChangeText={(text) => updateAddress('address', text)}
               multiline
@@ -226,9 +268,9 @@ export default function CheckoutScreen() {
 
           <View style={styles.row}>
             <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-              <Text style={styles.inputLabel}>City *</Text>
+              <Text style={styles.inputLabel}>City</Text>
               <TextInput
-                style={[styles.input, errors.city && styles.inputError]}
+                style={styles.input}
                 placeholder="City"
                 value={address.city}
                 onChangeText={(text) => updateAddress('city', text)}
@@ -268,7 +310,7 @@ export default function CheckoutScreen() {
                 <Text style={styles.areaSubtitle}>Delivery in 1-2 days</Text>
               </View>
               <Text style={[styles.areaPrice, shippingArea === 'IN' && styles.areaPriceActive]}>
-                ৳60
+                ৳{cart?.delivery_charge_inside_dhaka || 60}
               </Text>
             </TouchableOpacity>
 
@@ -287,7 +329,7 @@ export default function CheckoutScreen() {
                 <Text style={styles.areaSubtitle}>Delivery in 3-5 days</Text>
               </View>
               <Text style={[styles.areaPrice, shippingArea === 'OUT' && styles.areaPriceActive]}>
-                ৳120
+                ৳{cart?.delivery_charge_outside_dhaka || 120}
               </Text>
             </TouchableOpacity>
           </View>
@@ -360,23 +402,23 @@ export default function CheckoutScreen() {
           <Text style={styles.sectionTitle}>Price Details</Text>
           <View style={styles.priceRow}>
             <Text style={styles.priceLabel}>Subtotal</Text>
-            <Text style={styles.priceValue}>৳{cart.subtotal.toLocaleString()}</Text>
+            <Text style={styles.priceValue}>৳{subtotal.toLocaleString()}</Text>
           </View>
-          {cart.discount > 0 && (
+          {(cart?.coupon_discount || 0) > 0 && (
             <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Discount</Text>
+              <Text style={styles.priceLabel}>Coupon Discount</Text>
               <Text style={[styles.priceValue, styles.discountValue]}>
-                -৳{cart.discount.toLocaleString()}
+                -৳{(cart?.coupon_discount || 0).toLocaleString()}
               </Text>
             </View>
           )}
           <View style={styles.priceRow}>
-            <Text style={styles.priceLabel}>Shipping</Text>
-            <Text style={styles.priceValue}>৳{cart.shipping.toLocaleString()}</Text>
+            <Text style={styles.priceLabel}>Delivery ({shippingArea === 'IN' ? 'Inside Dhaka' : 'Outside Dhaka'})</Text>
+            <Text style={styles.priceValue}>৳{deliveryCharge.toLocaleString()}</Text>
           </View>
           <View style={[styles.priceRow, styles.totalRow]}>
             <Text style={styles.totalLabel}>Total</Text>
-            <Text style={styles.totalValue}>৳{cart.total.toLocaleString()}</Text>
+            <Text style={styles.totalValue}>৳{total.toLocaleString()}</Text>
           </View>
         </View>
       </ScrollView>
@@ -385,10 +427,10 @@ export default function CheckoutScreen() {
       <View style={styles.bottomBar}>
         <View style={styles.bottomInfo}>
           <Text style={styles.bottomLabel}>Total Amount</Text>
-          <Text style={styles.bottomPrice}>৳{cart.total.toLocaleString()}</Text>
+          <Text style={styles.bottomPrice}>৳{total.toLocaleString()}</Text>
         </View>
         <TouchableOpacity
-          style={[styles.placeOrderButton, isSubmitting && styles.buttonDisabled]}
+          style={[styles.placeOrderButton, (isSubmitting || isLoading) && styles.buttonDisabled]}
           onPress={handlePlaceOrder}
           disabled={isSubmitting || isLoading}
         >

@@ -1,12 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React from "react";
+import React, { useEffect } from "react";
 import {
   ActivityIndicator,
-  FlatList,
+  ScrollView,
   Text,
   TouchableOpacity,
   View,
+  RefreshControl,
 } from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -18,20 +19,33 @@ export default function CartPage() {
     cart,
     isLoading,
     itemCount,
+    subtotal,
+    total,
+    deliveryCharge,
+    shippingArea,
     updateQuantity,
     removeItem,
     clearCart,
+    refreshCart,
+    setShippingArea,
   } = useCart();
 
+  // Refresh cart on mount
+  useEffect(() => {
+    refreshCart();
+  }, []);
+
+  const cartItems = cart?.items || [];
+
   const handleIncrement = async (itemId: number) => {
-    const item = cart.items.find((i) => i.id === itemId);
+    const item = cartItems.find((i) => i.id === itemId);
     if (item) {
       await updateQuantity(itemId, item.quantity + 1);
     }
   };
 
   const handleDecrement = async (itemId: number) => {
-    const item = cart.items.find((i) => i.id === itemId);
+    const item = cartItems.find((i) => i.id === itemId);
     if (item && item.quantity > 1) {
       await updateQuantity(itemId, item.quantity - 1);
     }
@@ -49,13 +63,32 @@ export default function CartPage() {
     router.push("/(tabs)");
   };
 
-  const formatPrice = (price: number) => `৳${price.toLocaleString()}`;
+  const formatPrice = (price: number) => `৳${(price || 0).toLocaleString()}`;
 
-  const renderCartItem = ({ item }: { item: any }) => (
-    <View className="flex-row bg-white p-4 mx-4 mt-4 rounded-2xl shadow-sm">
+  // Get display values from cart item
+  const getItemImage = (item: any): string => {
+    if (item.variant?.image) return item.variant.image;
+    if (item.product_image) return item.product_image;
+    return "https://via.placeholder.com/100";
+  };
+
+  const getItemName = (item: any): string => {
+    return item.variant?.name || item.product_name || "Product";
+  };
+
+  const getItemPrice = (item: any): number => {
+    return item.variant?.final_price || item.variant?.price || item.discounted_price || 0;
+  };
+
+  const getItemTotalPrice = (item: any): number => {
+    return item.total_price || item.discounted_price || (getItemPrice(item) * item.quantity);
+  };
+
+  const renderCartItem = (item: any, index: number) => (
+    <View key={item.id} className="flex-row bg-white p-4 mx-4 mt-4 rounded-2xl shadow-sm">
       {/* Product Image */}
       <Image
-        source={{ uri: item.image || "https://via.placeholder.com/100" }}
+        source={{ uri: getItemImage(item) }}
         className="w-24 h-24 rounded-xl bg-gray-100"
         contentFit="cover"
       />
@@ -63,15 +96,15 @@ export default function CartPage() {
       {/* Product Details */}
       <View className="flex-1 ml-4">
         <Text className="text-base font-semibold text-gray-800" numberOfLines={2}>
-          {item.name}
+          {getItemName(item)}
         </Text>
 
-        {item.variant?.name && (
-          <Text className="text-sm text-gray-500 mt-1">{item.variant.name}</Text>
+        {item.variant?.attributes && (
+          <Text className="text-sm text-gray-500 mt-1">{item.variant.attributes}</Text>
         )}
 
         <Text className="text-lg font-bold text-green-600 mt-2">
-          {formatPrice(item.price)}
+          {formatPrice(getItemPrice(item))}
         </Text>
 
         {/* Quantity Controls */}
@@ -79,7 +112,7 @@ export default function CartPage() {
           <TouchableOpacity
             className="w-8 h-8 bg-gray-100 rounded-lg items-center justify-center"
             onPress={() => handleDecrement(item.id)}
-            disabled={item.quantity <= 1}
+            disabled={item.quantity <= 1 || isLoading}
           >
             <Ionicons
               name="remove"
@@ -95,12 +128,13 @@ export default function CartPage() {
           <TouchableOpacity
             className="w-8 h-8 bg-green-500 rounded-lg items-center justify-center"
             onPress={() => handleIncrement(item.id)}
+            disabled={isLoading}
           >
             <Ionicons name="add" size={18} color="#fff" />
           </TouchableOpacity>
 
           <Text className="ml-auto text-base font-bold text-gray-800">
-            {formatPrice(item.price * item.quantity)}
+            {formatPrice(getItemTotalPrice(item))}
           </Text>
         </View>
       </View>
@@ -109,6 +143,7 @@ export default function CartPage() {
       <TouchableOpacity
         className="absolute top-3 right-3 w-8 h-8 bg-red-50 rounded-full items-center justify-center"
         onPress={() => handleRemove(item.id)}
+        disabled={isLoading}
       >
         <Ionicons name="trash-outline" size={18} color="#EF4444" />
       </TouchableOpacity>
@@ -135,7 +170,7 @@ export default function CartPage() {
     </View>
   );
 
-  if (isLoading && cart.items.length === 0) {
+  if (isLoading && cartItems.length === 0) {
     return (
       <SafeAreaView className="flex-1 bg-gray-50 items-center justify-center">
         <ActivityIndicator size="large" color="#22C55E" />
@@ -154,28 +189,87 @@ export default function CartPage() {
             {itemCount} {itemCount === 1 ? "item" : "items"}
           </Text>
         </View>
-        {cart.items.length > 0 && (
+        {cartItems.length > 0 && (
           <TouchableOpacity
             className="bg-red-50 px-4 py-2 rounded-xl"
             onPress={clearCart}
+            disabled={isLoading}
           >
             <Text className="text-red-500 font-medium">Clear All</Text>
           </TouchableOpacity>
         )}
       </View>
 
-      {cart.items.length === 0 ? (
+      {cartItems.length === 0 ? (
         renderEmptyCart()
       ) : (
         <>
           {/* Cart Items List */}
-          <FlatList
-            data={cart.items}
-            renderItem={renderCartItem}
-            keyExtractor={(item) => item.id.toString()}
-            contentContainerStyle={{ paddingBottom: 220 }}
+          <ScrollView
+            contentContainerStyle={{ paddingBottom: 280 }}
             showsVerticalScrollIndicator={false}
-          />
+            refreshControl={
+              <RefreshControl
+                refreshing={isLoading}
+                onRefresh={refreshCart}
+                colors={["#22C55E"]}
+                tintColor="#22C55E"
+              />
+            }
+          >
+            {cartItems.map((item, index) => renderCartItem(item, index))}
+
+            {/* Delivery Area Selection */}
+            <View className="mx-4 mt-4 bg-white p-4 rounded-2xl">
+              <Text className="text-base font-semibold text-gray-800 mb-3">
+                Delivery Area
+              </Text>
+              <View className="flex-row">
+                <TouchableOpacity
+                  className={`flex-1 py-3 rounded-xl mr-2 items-center ${
+                    shippingArea === "IN" ? "bg-green-500" : "bg-gray-100"
+                  }`}
+                  onPress={() => setShippingArea("IN")}
+                >
+                  <Text
+                    className={`font-semibold ${
+                      shippingArea === "IN" ? "text-white" : "text-gray-600"
+                    }`}
+                  >
+                    Inside Dhaka
+                  </Text>
+                  <Text
+                    className={`text-sm mt-1 ${
+                      shippingArea === "IN" ? "text-white/80" : "text-gray-400"
+                    }`}
+                  >
+                    ৳{cart?.delivery_charge_inside_dhaka || 60}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  className={`flex-1 py-3 rounded-xl ml-2 items-center ${
+                    shippingArea === "OUT" ? "bg-green-500" : "bg-gray-100"
+                  }`}
+                  onPress={() => setShippingArea("OUT")}
+                >
+                  <Text
+                    className={`font-semibold ${
+                      shippingArea === "OUT" ? "text-white" : "text-gray-600"
+                    }`}
+                  >
+                    Outside Dhaka
+                  </Text>
+                  <Text
+                    className={`text-sm mt-1 ${
+                      shippingArea === "OUT" ? "text-white/80" : "text-gray-400"
+                    }`}
+                  >
+                    ৳{cart?.delivery_charge_outside_dhaka || 120}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </ScrollView>
 
           {/* Bottom Summary Panel */}
           <View className="absolute bottom-0 left-0 right-0 bg-white px-6 pt-5 pb-8 rounded-t-3xl shadow-2xl border-t border-gray-100">
@@ -184,23 +278,23 @@ export default function CartPage() {
               <View className="flex-row justify-between">
                 <Text className="text-gray-500">Subtotal</Text>
                 <Text className="text-gray-800 font-medium">
-                  {formatPrice(cart.subtotal)}
+                  {formatPrice(subtotal)}
                 </Text>
               </View>
 
-              {cart.discount > 0 && (
+              {(cart?.coupon_discount || 0) > 0 && (
                 <View className="flex-row justify-between">
-                  <Text className="text-gray-500">Discount</Text>
+                  <Text className="text-gray-500">Coupon Discount</Text>
                   <Text className="text-green-600 font-medium">
-                    -{formatPrice(cart.discount)}
+                    -{formatPrice(cart?.coupon_discount || 0)}
                   </Text>
                 </View>
               )}
 
               <View className="flex-row justify-between">
-                <Text className="text-gray-500">Shipping</Text>
+                <Text className="text-gray-500">Delivery ({shippingArea === "IN" ? "Inside Dhaka" : "Outside Dhaka"})</Text>
                 <Text className="text-gray-800 font-medium">
-                  {cart.shipping > 0 ? formatPrice(cart.shipping) : "Free"}
+                  {formatPrice(deliveryCharge)}
                 </Text>
               </View>
 
@@ -209,20 +303,29 @@ export default function CartPage() {
               <View className="flex-row justify-between">
                 <Text className="text-lg font-bold text-gray-800">Total</Text>
                 <Text className="text-xl font-bold text-green-600">
-                  {formatPrice(cart.total)}
+                  {formatPrice(total)}
                 </Text>
               </View>
             </View>
 
             {/* Checkout Button */}
             <TouchableOpacity
-              className="bg-green-500 py-4 rounded-2xl shadow-lg flex-row items-center justify-center"
+              className={`py-4 rounded-2xl shadow-lg flex-row items-center justify-center ${
+                isLoading ? "bg-green-400" : "bg-green-500"
+              }`}
               onPress={handleCheckout}
+              disabled={isLoading || cartItems.length === 0}
             >
-              <Ionicons name="card-outline" size={20} color="#fff" />
-              <Text className="text-white text-lg font-semibold ml-2">
-                Proceed to Checkout
-              </Text>
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="card-outline" size={20} color="#fff" />
+                  <Text className="text-white text-lg font-semibold ml-2">
+                    Proceed to Checkout
+                  </Text>
+                </>
+              )}
             </TouchableOpacity>
 
             {/* Continue Shopping */}

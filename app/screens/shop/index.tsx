@@ -4,19 +4,22 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Modal,
   RefreshControl,
+  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
   View,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getProducts, getCategories } from '@/utils/api';
 import { useCart } from '@/context/CartContext';
 import { useWishlist } from '@/context/WishlistContext';
-import { useCartNotification } from '@/context/CartNotificationContext';
+
+const { width } = Dimensions.get('window');
+const ITEM_WIDTH = (width - 48) / 2;
 
 interface ProductVariant {
   id: number;
@@ -59,7 +62,6 @@ export default function ShopScreen() {
 
   const { addItem, itemCount } = useCart();
   const { isInWishlist, addToWishlist, removeFromWishlist } = useWishlist();
-  const { showNotification, setNavigateToCart } = useCartNotification();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -76,20 +78,17 @@ export default function ShopScreen() {
   const [addingToCart, setAddingToCart] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
-  // Set up navigation callback for cart notification
-  useEffect(() => {
-    setNavigateToCart(() => router.push('/(tabs)/cart'));
-  }, [router, setNavigateToCart]);
-
   const fetchProducts = useCallback(async (pageNum: number = 1, reset: boolean = false) => {
     try {
       if (pageNum === 1) setIsLoading(true);
 
+      console.log('🛍️ Shop: Fetching products page', pageNum);
       const data = await getProducts(pageNum, 20, selectedCategory || undefined, searchQuery || undefined);
+      console.log('🛍️ Shop: Got', data?.length || 0, 'products');
 
-      let sortedData = [...(data || [])];
+      const productsArray = Array.isArray(data) ? data : [];
+      let sortedData = [...productsArray];
 
-      // Apply sorting
       switch (sortBy) {
         case 'price_low':
           sortedData.sort((a, b) => getProductPrice(a) - getProductPrice(b));
@@ -112,9 +111,12 @@ export default function ShopScreen() {
       }
 
       setPage(pageNum);
-      setHasMore((data?.length || 0) >= 20);
+      setHasMore(productsArray.length >= 20);
     } catch (error) {
       console.error('Error fetching products:', error);
+      if (pageNum === 1) {
+        setProducts([]);
+      }
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -124,10 +126,13 @@ export default function ShopScreen() {
 
   const fetchCategories = useCallback(async () => {
     try {
+      console.log('📂 Shop: Fetching categories');
       const data = await getCategories();
-      setCategories(data || []);
+      console.log('📂 Shop: Got', data?.length || 0, 'categories');
+      setCategories(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching categories:', error);
+      setCategories([]);
     }
   }, []);
 
@@ -152,6 +157,14 @@ export default function ShopScreen() {
 
   const handleSearch = () => {
     fetchProducts(1, true);
+  };
+
+  const handleGoBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)');
+    }
   };
 
   // Helper functions
@@ -197,24 +210,12 @@ export default function ShopScreen() {
     setAddingToCart(product.id);
 
     try {
-      const success = await addItem({
+      await addItem({
         id: product.id,
         name: product.name,
         price: getProductPrice(product),
         image: getProductImage(product),
       }, 1);
-
-      if (success) {
-        // Show beautiful cart notification popup
-        showNotification(
-          {
-            name: product.name,
-            price: getProductPrice(product),
-            image: getProductImage(product),
-          },
-          itemCount + 1
-        );
-      }
     } finally {
       setAddingToCart(null);
     }
@@ -233,6 +234,10 @@ export default function ShopScreen() {
     }
   };
 
+  const handleProductPress = (productId: number) => {
+    router.push(`/screens/product/${productId}`);
+  };
+
   const formatPrice = (price: number) => `৳${price.toLocaleString()}`;
 
   const sortOptions: { value: SortOption; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
@@ -243,19 +248,20 @@ export default function ShopScreen() {
     { value: 'newest', label: 'Newest First', icon: 'time-outline' },
   ];
 
-  const renderProductCard = ({ item }: { item: Product }) => {
-    const isWishlisted = isInWishlist(item.id);
-    const productHasDiscount = hasDiscount(item);
-    const discountPercent = getDiscountPercent(item);
-    const price = getProductPrice(item);
-    const originalPrice = getProductOriginalPrice(item);
-    const imageUrl = getProductImage(item);
+  const renderProductCard = (product: Product, index: number) => {
+    const isWishlisted = isInWishlist(product.id);
+    const productHasDiscount = hasDiscount(product);
+    const discountPercent = getDiscountPercent(product);
+    const price = getProductPrice(product);
+    const originalPrice = getProductOriginalPrice(product);
+    const imageUrl = getProductImage(product);
 
     if (viewMode === 'list') {
       return (
         <TouchableOpacity
+          key={product.id}
           className="bg-white mx-4 mb-3 rounded-2xl flex-row overflow-hidden shadow-sm"
-          onPress={() => router.push(`/screens/product/${item.id}`)}
+          onPress={() => handleProductPress(product.id)}
           activeOpacity={0.9}
         >
           <View className="relative">
@@ -274,15 +280,15 @@ export default function ShopScreen() {
           <View className="flex-1 p-3 justify-between">
             <View>
               <Text className="text-gray-800 font-semibold text-sm" numberOfLines={2}>
-                {item.name}
+                {product.name}
               </Text>
-              {item.store && (
-                <Text className="text-gray-400 text-xs mt-1">{item.store.name}</Text>
+              {product.store && (
+                <Text className="text-gray-400 text-xs mt-1">{product.store.name}</Text>
               )}
-              {item.rating && (
+              {product.rating && (
                 <View className="flex-row items-center mt-1">
                   <Ionicons name="star" size={12} color="#FBBF24" />
-                  <Text className="text-gray-500 text-xs ml-1">{item.rating.toFixed(1)}</Text>
+                  <Text className="text-gray-500 text-xs ml-1">{product.rating.toFixed(1)}</Text>
                 </View>
               )}
             </View>
@@ -296,7 +302,7 @@ export default function ShopScreen() {
               <View className="flex-row items-center">
                 <TouchableOpacity
                   className="w-9 h-9 rounded-full bg-gray-100 items-center justify-center mr-2"
-                  onPress={() => toggleWishlist(item)}
+                  onPress={() => toggleWishlist(product)}
                 >
                   <Ionicons
                     name={isWishlisted ? 'heart' : 'heart-outline'}
@@ -306,12 +312,12 @@ export default function ShopScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   className={`w-9 h-9 rounded-full items-center justify-center ${
-                    addingToCart === item.id ? 'bg-green-400' : 'bg-green-500'
+                    addingToCart === product.id ? 'bg-green-400' : 'bg-green-500'
                   }`}
-                  onPress={() => handleAddToCart(item)}
-                  disabled={addingToCart === item.id}
+                  onPress={() => handleAddToCart(product)}
+                  disabled={addingToCart === product.id}
                 >
-                  {addingToCart === item.id ? (
+                  {addingToCart === product.id ? (
                     <ActivityIndicator size="small" color="#fff" />
                   ) : (
                     <Ionicons name="cart-outline" size={18} color="#fff" />
@@ -326,8 +332,10 @@ export default function ShopScreen() {
 
     return (
       <TouchableOpacity
-        className="w-[48%] bg-white rounded-2xl mb-4 overflow-hidden shadow-sm"
-        onPress={() => router.push(`/screens/product/${item.id}`)}
+        key={product.id}
+        style={{ width: ITEM_WIDTH }}
+        className="bg-white rounded-2xl mb-4 overflow-hidden shadow-sm"
+        onPress={() => handleProductPress(product.id)}
         activeOpacity={0.9}
       >
         <View className="relative">
@@ -344,7 +352,7 @@ export default function ShopScreen() {
           )}
           <TouchableOpacity
             className="absolute top-2 right-2 w-8 h-8 bg-white rounded-full items-center justify-center shadow-md"
-            onPress={() => toggleWishlist(item)}
+            onPress={() => toggleWishlist(product)}
           >
             <Ionicons
               name={isWishlisted ? 'heart' : 'heart-outline'}
@@ -355,12 +363,12 @@ export default function ShopScreen() {
         </View>
         <View className="p-3">
           <Text className="text-gray-800 font-semibold text-sm" numberOfLines={2}>
-            {item.name}
+            {product.name}
           </Text>
-          {item.rating && (
+          {product.rating && (
             <View className="flex-row items-center mt-1">
               <Ionicons name="star" size={12} color="#FBBF24" />
-              <Text className="text-gray-500 text-xs ml-1">{item.rating.toFixed(1)}</Text>
+              <Text className="text-gray-500 text-xs ml-1">{product.rating.toFixed(1)}</Text>
             </View>
           )}
           <View className="flex-row items-center mt-2">
@@ -371,12 +379,12 @@ export default function ShopScreen() {
           </View>
           <TouchableOpacity
             className={`mt-3 py-2.5 rounded-xl items-center ${
-              addingToCart === item.id ? 'bg-green-400' : 'bg-green-500'
+              addingToCart === product.id ? 'bg-green-400' : 'bg-green-500'
             }`}
-            onPress={() => handleAddToCart(item)}
-            disabled={addingToCart === item.id}
+            onPress={() => handleAddToCart(product)}
+            disabled={addingToCart === product.id}
           >
-            {addingToCart === item.id ? (
+            {addingToCart === product.id ? (
               <View className="flex-row items-center">
                 <ActivityIndicator size="small" color="#fff" />
                 <Text className="text-white font-semibold text-sm ml-2">Adding...</Text>
@@ -392,69 +400,6 @@ export default function ShopScreen() {
       </TouchableOpacity>
     );
   };
-
-  const renderHeader = () => (
-    <View className="mb-4">
-      {/* Category Chips */}
-      {categories.length > 0 && (
-        <View className="px-4 mb-4">
-          <FlatList
-            horizontal
-            data={[{ id: 0, name: 'All' }, ...categories]}
-            keyExtractor={(item) => item.id.toString()}
-            showsHorizontalScrollIndicator={false}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                className={`mr-2 px-4 py-2 rounded-full ${
-                  (item.id === 0 && !selectedCategory) || selectedCategory === item.id.toString()
-                    ? 'bg-green-500'
-                    : 'bg-white border border-gray-200'
-                }`}
-                onPress={() => {
-                  setSelectedCategory(item.id === 0 ? undefined : item.id.toString());
-                }}
-              >
-                <Text
-                  className={`font-semibold text-sm ${
-                    (item.id === 0 && !selectedCategory) || selectedCategory === item.id.toString()
-                      ? 'text-white'
-                      : 'text-gray-600'
-                  }`}
-                >
-                  {item.name}
-                </Text>
-              </TouchableOpacity>
-            )}
-          />
-        </View>
-      )}
-
-      {/* Results count and view toggle */}
-      <View className="px-4 flex-row items-center justify-between">
-        <Text className="text-gray-500 text-sm">
-          {products.length} products found
-        </Text>
-        <View className="flex-row items-center">
-          <TouchableOpacity
-            className={`w-9 h-9 rounded-lg items-center justify-center mr-2 ${
-              viewMode === 'grid' ? 'bg-green-500' : 'bg-gray-100'
-            }`}
-            onPress={() => setViewMode('grid')}
-          >
-            <Ionicons name="grid-outline" size={18} color={viewMode === 'grid' ? '#fff' : '#6B7280'} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            className={`w-9 h-9 rounded-lg items-center justify-center ${
-              viewMode === 'list' ? 'bg-green-500' : 'bg-gray-100'
-            }`}
-            onPress={() => setViewMode('list')}
-          >
-            <Ionicons name="list-outline" size={18} color={viewMode === 'list' ? '#fff' : '#6B7280'} />
-          </TouchableOpacity>
-        </View>
-      </View>
-    </View>
-  );
 
   const renderEmpty = () => (
     <View className="flex-1 items-center justify-center py-20">
@@ -496,7 +441,7 @@ export default function ShopScreen() {
         <View className="flex-row items-center mb-4">
           <TouchableOpacity
             className="w-10 h-10 rounded-full bg-gray-100 items-center justify-center mr-3"
-            onPress={() => router.back()}
+            onPress={handleGoBack}
           >
             <Ionicons name="arrow-back" size={22} color="#374151" />
           </TouchableOpacity>
@@ -542,18 +487,10 @@ export default function ShopScreen() {
         </View>
       </View>
 
-      {/* Products List */}
-      <FlatList
-        data={products}
-        renderItem={renderProductCard}
-        keyExtractor={(item) => item.id.toString()}
-        numColumns={viewMode === 'grid' ? 2 : 1}
-        key={viewMode}
-        columnWrapperStyle={viewMode === 'grid' ? { paddingHorizontal: 16, justifyContent: 'space-between' } : undefined}
-        contentContainerStyle={{ paddingTop: 16, paddingBottom: 100 }}
+      {/* Main Content - ScrollView for everything */}
+      <ScrollView
+        className="flex-1"
         showsVerticalScrollIndicator={false}
-        ListHeaderComponent={renderHeader}
-        ListEmptyComponent={renderEmpty}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
@@ -562,16 +499,98 @@ export default function ShopScreen() {
             tintColor="#22C55E"
           />
         }
-        onEndReached={loadMore}
-        onEndReachedThreshold={0.5}
-        ListFooterComponent={
-          isLoadingMore ? (
-            <View className="py-4 items-center">
-              <ActivityIndicator size="small" color="#22C55E" />
+        onScroll={({ nativeEvent }) => {
+          const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+          const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 100;
+          if (isCloseToBottom && !isLoadingMore && hasMore) {
+            loadMore();
+          }
+        }}
+        scrollEventThrottle={400}
+      >
+        {/* Category Chips */}
+        {categories.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 }}
+          >
+            {[{ id: 0, name: 'All' }, ...categories].map((item) => (
+              <TouchableOpacity
+                key={item.id.toString()}
+                className={`mr-2 px-4 py-2 rounded-full ${
+                  (item.id === 0 && !selectedCategory) || selectedCategory === item.id.toString()
+                    ? 'bg-green-500'
+                    : 'bg-white border border-gray-200'
+                }`}
+                onPress={() => {
+                  setSelectedCategory(item.id === 0 ? undefined : item.id.toString());
+                }}
+              >
+                <Text
+                  className={`font-semibold text-sm ${
+                    (item.id === 0 && !selectedCategory) || selectedCategory === item.id.toString()
+                      ? 'text-white'
+                      : 'text-gray-600'
+                  }`}
+                >
+                  {item.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
+
+        {/* Results count and view toggle */}
+        <View className="px-4 py-3 flex-row items-center justify-between">
+          <Text className="text-gray-500 text-sm">
+            {products.length} products found
+          </Text>
+          <View className="flex-row items-center">
+            <TouchableOpacity
+              className={`w-9 h-9 rounded-lg items-center justify-center mr-2 ${
+                viewMode === 'grid' ? 'bg-green-500' : 'bg-gray-100'
+              }`}
+              onPress={() => setViewMode('grid')}
+            >
+              <Ionicons name="grid-outline" size={18} color={viewMode === 'grid' ? '#fff' : '#6B7280'} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              className={`w-9 h-9 rounded-lg items-center justify-center ${
+                viewMode === 'list' ? 'bg-green-500' : 'bg-gray-100'
+              }`}
+              onPress={() => setViewMode('list')}
+            >
+              <Ionicons name="list-outline" size={18} color={viewMode === 'list' ? '#fff' : '#6B7280'} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Products */}
+        {products.length > 0 ? (
+          viewMode === 'grid' ? (
+            <View className="px-4 flex-row flex-wrap justify-between">
+              {products.map((product, index) => renderProductCard(product, index))}
             </View>
-          ) : null
-        }
-      />
+          ) : (
+            <View>
+              {products.map((product, index) => renderProductCard(product, index))}
+            </View>
+          )
+        ) : (
+          renderEmpty()
+        )}
+
+        {/* Loading More */}
+        {isLoadingMore && (
+          <View className="py-4 items-center">
+            <ActivityIndicator size="small" color="#22C55E" />
+          </View>
+        )}
+
+        {/* Bottom Padding */}
+        <View className="h-24" />
+      </ScrollView>
 
       {/* Sort Modal */}
       <Modal
@@ -643,11 +662,10 @@ export default function ShopScreen() {
                 <Text className="text-green-500 font-semibold">Clear</Text>
               </TouchableOpacity>
             </View>
-            <FlatList
-              data={categories}
-              keyExtractor={(item) => item.id.toString()}
-              renderItem={({ item }) => (
+            <ScrollView>
+              {categories.map((item) => (
                 <TouchableOpacity
+                  key={item.id.toString()}
                   className={`flex-row items-center px-6 py-4 border-b border-gray-100 ${
                     selectedCategory === item.id.toString() ? 'bg-green-50' : ''
                   }`}
@@ -665,8 +683,8 @@ export default function ShopScreen() {
                     <Ionicons name="checkmark-circle" size={24} color="#22C55E" />
                   )}
                 </TouchableOpacity>
-              )}
-            />
+              ))}
+            </ScrollView>
             <View className="h-8" />
           </View>
         </TouchableOpacity>

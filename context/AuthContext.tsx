@@ -355,8 +355,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 // Custom Hook
 export function useAuth() {
   const context = useContext(AuthContext);
+
+  // Return a safe fallback if context is not available
+  // This prevents errors when component is used outside provider
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    console.warn('useAuth: Context not available, using fallback');
+    return {
+      user: null,
+      tokens: null,
+      isAuthenticated: false,
+      isLoading: false,
+      login: async () => ({ success: false, error: 'Context not available' }),
+      register: async () => ({ success: false, error: 'Context not available' }),
+      logout: async () => {},
+      updateProfile: async () => ({ success: false, error: 'Context not available' }),
+      refreshUser: async () => {},
+    };
   }
   return context;
 }

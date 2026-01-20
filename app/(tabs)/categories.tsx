@@ -35,11 +35,17 @@ export default function CategoriesScreen() {
 
   const fetchCategories = useCallback(async () => {
     try {
+      console.log('📂 Categories: Fetching categories');
       const data = await getCategories();
-      setCategories(data || []);
-      setFilteredCategories(data || []);
+      console.log('📂 Categories: Got', data?.length || 0, 'categories');
+      // Ensure we have an array
+      const categoriesArray = Array.isArray(data) ? data : [];
+      setCategories(categoriesArray);
+      setFilteredCategories(categoriesArray);
     } catch (error) {
       console.error('Error fetching categories:', error);
+      setCategories([]);
+      setFilteredCategories([]);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);

@@ -244,8 +244,16 @@ export function CartNotificationProvider({ children }: { children: ReactNode }) 
 
 export function useCartNotification() {
   const context = useContext(CartNotificationContext);
+
+  // Return a safe fallback if context is not available
+  // This prevents errors when component is used outside provider
   if (context === undefined) {
-    throw new Error('useCartNotification must be used within a CartNotificationProvider');
+    console.warn('useCartNotification: Context not available, using fallback');
+    return {
+      showNotification: () => {},
+      hideNotification: () => {},
+      setNavigateToCart: () => {},
+    };
   }
   return context;
 }
