@@ -73,24 +73,24 @@ export async function loginUser(email, password) {
   console.log("🔐 Login Email:", email);
 
   try {
-    // Try with email field first (Djoser with email auth)
+    // Try with username field first (Django default)
     let res = await fetch(url, {
       method: 'POST',
       headers: getHeaders(),
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ username: email, password }),
     });
 
-    console.log("📊 Login Status (email):", res.status);
+    console.log("📊 Login Status (username):", res.status);
 
-    // If email login fails, try with username field
+    // If username login fails, try with email field
     if (!res.ok) {
-      console.log("🔄 Trying with username field...");
+      console.log("🔄 Trying with email field...");
       res = await fetch(url, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ username: email, password }),
+        body: JSON.stringify({ email, password }),
       });
-      console.log("📊 Login Status (username):", res.status);
+      console.log("📊 Login Status (email):", res.status);
     }
 
     if (!res.ok) {
@@ -110,30 +110,49 @@ export async function loginUser(email, password) {
           errorMessage = Array.isArray(errorData.email) ? errorData.email[0] : errorData.email;
         } else if (errorData.password) {
           errorMessage = Array.isArray(errorData.password) ? errorData.password[0] : errorData.password;
+        } else if (errorData.username) {
+          errorMessage = Array.isArray(errorData.username) ? errorData.username[0] : errorData.username;
         }
       }
       throw new Error(errorMessage);
     }
 
     const data = await parseResponse(res);
-    console.log("✅ Login Success:", data ? 'Token received' : 'No data');
+    console.log("✅ Login Raw Response:", JSON.stringify(data).substring(0, 200));
 
-    // Handle response structure: {success: true, data: {access, refresh}} or {access, refresh}
-    if (data && data.success && data.data) {
-      console.log("✅ Extracting tokens from data.data");
+    // Extract tokens from various response structures
+    let accessToken = null;
+    let refreshToken = null;
+
+    // Structure 1: {success: true, data: {access, refresh}}
+    if (data && data.success && data.data && data.data.access) {
+      console.log("✅ Tokens from data.data");
+      accessToken = data.data.access;
+      refreshToken = data.data.refresh;
+    }
+    // Structure 2: {data: {access, refresh}}
+    else if (data && data.data && data.data.access) {
+      console.log("✅ Tokens from data.data (no success flag)");
+      accessToken = data.data.access;
+      refreshToken = data.data.refresh;
+    }
+    // Structure 3: {access, refresh} directly
+    else if (data && data.access) {
+      console.log("✅ Tokens directly in response");
+      accessToken = data.access;
+      refreshToken = data.refresh;
+    }
+
+    if (accessToken) {
+      console.log("✅ Login Success - Access token obtained");
       return {
-        access: data.data.access,
-        refresh: data.data.refresh,
+        access: accessToken,
+        refresh: refreshToken,
       };
     }
 
-    // If tokens are directly in response
-    if (data && data.access) {
-      return data;
-    }
-
-    console.log("⚠️ Unexpected response structure:", data);
-    return data;
+    console.log("⚠️ Unexpected response structure:", JSON.stringify(data));
+    throw new Error('Invalid response from server');
   } catch (err) {
     console.log("❌ Login Error:", err.message);
     throw err; // Re-throw to let caller handle
@@ -169,26 +188,57 @@ export async function registerUser(userData) {
     console.log("📊 Register Status:", res.status);
 
     const data = await parseResponse(res);
+    console.log("📝 Register Raw Response:", JSON.stringify(data).substring(0, 300));
 
     if (!res.ok) {
       console.log("❌ Register Failed:", data);
-      throw new Error(data?.error || data?.detail || 'Registration failed');
+
+      // Parse error messages from various formats
+      let errorMessage = 'Registration failed';
+      if (data) {
+        if (data.error) {
+          errorMessage = data.error;
+        } else if (data.detail) {
+          errorMessage = data.detail;
+        } else if (data.message) {
+          errorMessage = data.message;
+        } else if (data.username) {
+          errorMessage = Array.isArray(data.username) ? data.username[0] : data.username;
+        } else if (data.email) {
+          errorMessage = Array.isArray(data.email) ? data.email[0] : data.email;
+        } else if (data.phone) {
+          errorMessage = Array.isArray(data.phone) ? data.phone[0] : data.phone;
+        } else if (data.password) {
+          errorMessage = Array.isArray(data.password) ? data.password[0] : data.password;
+        } else if (data.non_field_errors) {
+          errorMessage = Array.isArray(data.non_field_errors) ? data.non_field_errors[0] : data.non_field_errors;
+        }
+      }
+      throw new Error(errorMessage);
     }
 
-    console.log("✅ Register Success:", data);
+    console.log("✅ Register Success");
 
     // After successful registration, auto-login the user
-    if (data) {
+    try {
+      console.log("🔄 Auto-login after registration...");
       const loginResponse = await loginUser(registerData.username, registerData.password);
       if (loginResponse && loginResponse.access) {
+        console.log("✅ Auto-login successful");
         return {
-          ...data,
+          user: data.data || data,
           access: loginResponse.access,
           refresh: loginResponse.refresh,
         };
       }
+    } catch (loginErr) {
+      console.log("⚠️ Auto-login failed, returning registration data:", loginErr.message);
     }
 
+    // Return registration data if auto-login fails
+    if (data && data.success && data.data) {
+      return data.data;
+    }
     return data;
   } catch (err) {
     console.log("❌ Register Error:", err.message);
@@ -224,45 +274,52 @@ export async function getProducts(page = 1, limit = 20, category = null, search 
     console.log("📊 Products Status:", res.status);
 
     if (!res.ok) {
-      console.log("❌ Products API Failed");
+      console.log("❌ Products API Failed with status:", res.status);
       return [];
     }
 
     const json = await parseResponse(res);
+    console.log("🛍️ Products Raw:", JSON.stringify(json).substring(0, 400));
 
-    // Check different response structures
-    // Structure: {success: true, data: {count: 12, results: [...]}} or {success: true, data: [...]}
-    if (json && json.success && json.data) {
-      // Check if data has results (paginated)
-      if (json.data.results && Array.isArray(json.data.results)) {
-        console.log(`✅ Found ${json.data.results.length} products in 'data.results'`);
-        return json.data.results;
-      }
-      // Check if data is array directly
-      if (Array.isArray(json.data)) {
-        console.log(`✅ Found ${json.data.length} products in 'data'`);
-        return json.data;
-      }
+    let products = [];
+
+    // Check various response structures
+    // Structure 1: {success: true, data: {results: [...]}}
+    if (json && json.success && json.data && json.data.results && Array.isArray(json.data.results)) {
+      products = json.data.results;
+      console.log(`✅ Found ${products.length} products in 'data.results'`);
     }
-    // Try direct data access
-    if (json && json.data && Array.isArray(json.data)) {
-      console.log(`✅ Found ${json.data.length} products in 'data'`);
-      return json.data;
+    // Structure 2: {success: true, data: [...]}
+    else if (json && json.success && json.data && Array.isArray(json.data)) {
+      products = json.data;
+      console.log(`✅ Found ${products.length} products in 'data' (array)`);
     }
-    // Try results directly
-    if (json && json.results && Array.isArray(json.results)) {
-      console.log(`✅ Found ${json.results.length} products in 'results'`);
-      return json.results;
+    // Structure 3: {data: {results: [...]}}
+    else if (json && json.data && json.data.results && Array.isArray(json.data.results)) {
+      products = json.data.results;
+      console.log(`✅ Found ${products.length} products in 'data.results' (no success)`);
     }
-    // Try if response is array
-    if (Array.isArray(json)) {
-      console.log(`✅ Found ${json.length} products in array`);
-      return json;
+    // Structure 4: {data: [...]}
+    else if (json && json.data && Array.isArray(json.data)) {
+      products = json.data;
+      console.log(`✅ Found ${products.length} products in 'data'`);
+    }
+    // Structure 5: {results: [...]}
+    else if (json && json.results && Array.isArray(json.results)) {
+      products = json.results;
+      console.log(`✅ Found ${products.length} products in 'results'`);
+    }
+    // Structure 6: Direct array
+    else if (Array.isArray(json)) {
+      products = json;
+      console.log(`✅ Found ${products.length} products in direct array`);
     }
 
-    console.log("⚠️ No products found in response");
-    console.log("📊 Response structure:", JSON.stringify(json, null, 2).substring(0, 500));
-    return [];
+    if (products.length === 0) {
+      console.log("⚠️ No products found in response");
+    }
+
+    return products;
   } catch (err) {
     console.log("❌ Products Error:", err.message);
     return [];
@@ -280,19 +337,38 @@ export async function getProductById(id) {
     console.log("📊 Product Detail Status:", res.status);
 
     if (!res.ok) {
-      throw new Error('Product not found');
+      console.log("❌ Product Detail API failed with status:", res.status);
+      return null;
     }
 
     const json = await parseResponse(res);
-    console.log("✅ Product Detail Response:", json ? 'Received' : 'No data');
+    console.log("🔍 Product Detail Raw:", JSON.stringify(json).substring(0, 400));
 
-    // Handle response structure - could be {success, data} or direct object
-    if (json && json.success && json.data) {
-      return json.data;
-    } else if (json && json.data) {
-      return json.data;
+    let product = null;
+
+    // Check various response structures
+    // Structure 1: {success: true, data: {...}}
+    if (json && json.success && json.data && json.data.id) {
+      product = json.data;
+      console.log("✅ Product from data (success)");
     }
-    return json;
+    // Structure 2: {data: {...}}
+    else if (json && json.data && json.data.id) {
+      product = json.data;
+      console.log("✅ Product from data");
+    }
+    // Structure 3: Direct product object
+    else if (json && json.id) {
+      product = json;
+      console.log("✅ Product directly in response");
+    }
+
+    if (product) {
+      return product;
+    }
+
+    console.log("⚠️ Product not found in response");
+    return null;
   } catch (err) {
     console.log("❌ Product Detail Error:", err.message);
     return null;
@@ -311,67 +387,114 @@ export async function searchProducts(query, page = 1, limit = 20) {
 
 // ==================== CATEGORY APIs ====================
 export async function getCategories() {
-  const url = `${BASE_URL}/api/v1.0/stores/categories/?pagination=0`;
-  
-  console.log("📂 Categories URL:", url);
-  
-  try {
-    const res = await fetch(url);
-    
-    console.log("📊 Categories Status:", res.status);
-    
-    if (!res.ok) {
-      throw new Error('Failed to fetch categories');
+  // Try multiple URL patterns
+  const urls = [
+    `${BASE_URL}/api/v1.0/stores/categories/?pagination=0`,
+    `${BASE_URL}/api/v1.0/customers/categories/`,
+    `${BASE_URL}/api/v1.0/base/categories/`,
+  ];
+
+  for (const url of urls) {
+    console.log("📂 Trying Categories URL:", url);
+
+    try {
+      const res = await fetch(url);
+
+      console.log("📊 Categories Status:", res.status);
+
+      if (!res.ok) {
+        console.log("❌ URL failed, trying next...");
+        continue;
+      }
+
+      const json = await parseResponse(res);
+      console.log("📂 Categories Raw:", JSON.stringify(json).substring(0, 300));
+
+      let categories = [];
+
+      // Check various response structures
+      // Structure 1: {success: true, data: [...]}
+      if (json && json.success && json.data && Array.isArray(json.data)) {
+        categories = json.data;
+      }
+      // Structure 2: {data: [...]}
+      else if (json && json.data && Array.isArray(json.data)) {
+        categories = json.data;
+      }
+      // Structure 3: {data: {results: [...]}}
+      else if (json && json.data && json.data.results && Array.isArray(json.data.results)) {
+        categories = json.data.results;
+      }
+      // Structure 4: {results: [...]}
+      else if (json && json.results && Array.isArray(json.results)) {
+        categories = json.results;
+      }
+      // Structure 5: Direct array
+      else if (Array.isArray(json)) {
+        categories = json;
+      }
+
+      if (categories.length > 0) {
+        console.log(`✅ Found ${categories.length} categories`);
+        return categories;
+      }
+    } catch (err) {
+      console.log("❌ Categories Error:", err.message);
     }
-    
-    const json = await parseResponse(res);
-    
-    if (json && json.data) {
-      console.log(`✅ Found ${json.data.length} categories in 'data'`);
-      return json.data;
-    } else if (Array.isArray(json)) {
-      console.log(`✅ Found ${json.length} categories in array`);
-      return json;
-    } else {
-      console.log("⚠️ No categories found");
-      return [];
-    }
-  } catch (err) {
-    console.log("❌ Categories Error:", err.message);
-    return [];
   }
+
+  console.log("⚠️ No categories found from any URL");
+  return [];
 }
 
 export async function getSubCategories(categoryId) {
-  const url = `${BASE_URL}/api/v1.0/stores/subcategories/${categoryId}/`;
-  
-  console.log("📂 SubCategories URL:", url);
-  
-  try {
-    const res = await fetch(url);
-    
-    console.log("📊 SubCategories Status:", res.status);
-    
-    if (!res.ok) {
-      throw new Error('Failed to fetch subcategories');
+  // Try multiple URL patterns
+  const urls = [
+    `${BASE_URL}/api/v1.0/stores/subcategories/?category=${categoryId}`,
+    `${BASE_URL}/api/v1.0/stores/subcategories/${categoryId}/`,
+    `${BASE_URL}/api/v1.0/customers/subcategories/?category=${categoryId}`,
+  ];
+
+  for (const url of urls) {
+    console.log("📂 Trying SubCategories URL:", url);
+
+    try {
+      const res = await fetch(url);
+
+      console.log("📊 SubCategories Status:", res.status);
+
+      if (!res.ok) {
+        console.log("❌ URL failed, trying next...");
+        continue;
+      }
+
+      const json = await parseResponse(res);
+      console.log("📂 SubCategories Raw:", JSON.stringify(json).substring(0, 300));
+
+      let subcategories = [];
+
+      // Check various response structures
+      if (json && json.success && json.data && Array.isArray(json.data)) {
+        subcategories = json.data;
+      } else if (json && json.data && Array.isArray(json.data)) {
+        subcategories = json.data;
+      } else if (json && json.results && Array.isArray(json.results)) {
+        subcategories = json.results;
+      } else if (Array.isArray(json)) {
+        subcategories = json;
+      }
+
+      if (subcategories.length > 0) {
+        console.log(`✅ Found ${subcategories.length} subcategories`);
+        return subcategories;
+      }
+    } catch (err) {
+      console.log("❌ SubCategories Error:", err.message);
     }
-    
-    const json = await parseResponse(res);
-    
-    if (json && json.data) {
-      console.log(`✅ Found ${json.data.length} subcategories in 'data'`);
-      return json.data;
-    } else if (Array.isArray(json)) {
-      console.log(`✅ Found ${json.length} subcategories in array`);
-      return json;
-    } else {
-      console.log("⚠️ No subcategories found");
-      return [];
-    }
-  } catch (err) {
-    console.log("❌ SubCategories Error:", err.message);
-    return [];
   }
+
+  console.log("⚠️ No subcategories found from any URL");
+  return [];
 }
 
 // ==================== CART APIs ====================
@@ -642,11 +765,14 @@ export async function getHomePageData() {
     console.log("📊 Home Page Status:", res.status);
 
     if (!res.ok) {
-      throw new Error('Failed to fetch home page data');
+      console.log("❌ Home Page API failed with status:", res.status);
+      return null;
     }
 
     const data = await parseResponse(res);
-    console.log("✅ Home Page Response:", data ? 'Received' : 'No data');
+    console.log("🏠 Home Page Raw:", JSON.stringify(data).substring(0, 400));
+
+    // Return full response with success flag for caller to parse
     return data;
   } catch (err) {
     console.log("❌ Home Page Error:", err.message);
@@ -1009,42 +1135,60 @@ export async function getPaymentMethods() {
 
 // ==================== USER PROFILE APIs ====================
 export async function getUserProfile(token) {
-  const url = `${AUTH_URL}/auth/users/me/`;
+  // Try multiple endpoints
+  const urls = [
+    `${AUTH_URL}/auth/users/me/`,
+    `${BASE_URL}/api/v1.0/customers/profile/`,
+    `${BASE_URL}/api/v1.0/customers/me/`,
+  ];
 
-  console.log("👤 User Profile URL:", url);
+  for (const url of urls) {
+    console.log("👤 Trying User Profile URL:", url);
 
-  try {
-    const res = await fetch(url, {
-      headers: getHeaders(token),
-    });
+    try {
+      const res = await fetch(url, {
+        headers: getHeaders(token),
+      });
 
-    console.log("📊 User Profile Status:", res.status);
+      console.log("📊 User Profile Status:", res.status);
 
-    if (!res.ok) {
-      console.log("❌ User Profile fetch failed with status:", res.status);
-      throw new Error('Failed to fetch user profile');
+      if (!res.ok) {
+        console.log("❌ Profile URL failed, trying next...");
+        continue;
+      }
+
+      const data = await parseResponse(res);
+      console.log("👤 User Profile Raw:", JSON.stringify(data).substring(0, 300));
+
+      let profile = null;
+
+      // Check various response structures
+      // Structure 1: {success: true, data: {...}}
+      if (data && data.success && data.data && (data.data.id || data.data.email)) {
+        profile = data.data;
+        console.log("✅ Profile from data.data (success)");
+      }
+      // Structure 2: {data: {...}}
+      else if (data && data.data && (data.data.id || data.data.email)) {
+        profile = data.data;
+        console.log("✅ Profile from data.data");
+      }
+      // Structure 3: Direct user object
+      else if (data && (data.id || data.email || data.username)) {
+        profile = data;
+        console.log("✅ Profile directly in response");
+      }
+
+      if (profile) {
+        return profile;
+      }
+    } catch (err) {
+      console.log("❌ User Profile Error:", err.message);
     }
-
-    const data = await parseResponse(res);
-    console.log("✅ User Profile Response:", JSON.stringify(data).substring(0, 200));
-
-    // Handle response structure: {success: true, data: {...}} or direct user object
-    if (data && data.success && data.data) {
-      console.log("✅ Extracting profile from data.data");
-      return data.data;
-    }
-
-    // If user data is directly in response
-    if (data && (data.id || data.email || data.username)) {
-      return data;
-    }
-
-    console.log("⚠️ Unexpected profile structure, returning as is");
-    return data;
-  } catch (err) {
-    console.log("❌ User Profile Error:", err.message);
-    return null;
   }
+
+  console.log("⚠️ Could not fetch profile from any URL");
+  return null;
 }
 
 export async function updateUserProfile(userData, token) {

@@ -206,7 +206,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setState(prev => ({ ...prev, isLoading: true }));
 
-      const response = await registerUser(data);
+      console.log('📝 AuthContext: Attempting registration for:', data.email);
+
+      let response;
+      try {
+        response = await registerUser(data);
+      } catch (registerError: any) {
+        console.error('Register API error:', registerError);
+        setState(prev => ({ ...prev, isLoading: false }));
+        return { success: false, error: registerError.message || 'Registration failed' };
+      }
+
+      console.log('📝 AuthContext: Registration response:', JSON.stringify(response).substring(0, 200));
 
       if (!response) {
         setState(prev => ({ ...prev, isLoading: false }));
@@ -215,11 +226,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // If registration auto-logs in, handle that
       if (response.access) {
+        console.log('✅ AuthContext: Auto-login tokens received');
         const tokens: AuthTokens = {
           access: response.access,
           refresh: response.refresh,
         };
 
+        // Try to fetch user profile
         const profile = await getUserProfile(tokens.access);
 
         if (profile) {
@@ -234,11 +247,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             isAuthenticated: true,
             isLoading: false,
           });
+
+          console.log('✅ AuthContext: Registration successful with full profile');
+        } else {
+          // Even if profile fetch fails, we have valid tokens
+          const basicUser: User = {
+            id: 0,
+            email: data.email,
+            name: data.name || `${data.first_name || ''} ${data.last_name || ''}`.trim(),
+          };
+
+          await Promise.all([
+            SecureStore.setItemAsync(TOKEN_KEY, JSON.stringify(tokens)),
+            SecureStore.setItemAsync(USER_KEY, JSON.stringify(basicUser)),
+          ]);
+
+          setState({
+            user: basicUser,
+            tokens,
+            isAuthenticated: true,
+            isLoading: false,
+          });
+
+          console.log('✅ AuthContext: Registration successful with basic profile');
         }
-      } else {
-        setState(prev => ({ ...prev, isLoading: false }));
+
+        return { success: true };
       }
 
+      // Registration successful but no auto-login (user needs to login manually)
+      setState(prev => ({ ...prev, isLoading: false }));
+      console.log('✅ AuthContext: Registration successful, manual login required');
       return { success: true };
     } catch (error: any) {
       console.error('Register error:', error);
