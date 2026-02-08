@@ -73,17 +73,30 @@ export default function CartPage() {
 
   const formatPrice = (price: number) => `৳${(price || 0).toLocaleString()}`;
 
-  // Get display values from cart item
+  // ✅ FIXED: Get product image with multiple fallbacks
   const getItemImage = (item: any): string => {
-    if (item.variant?.image) return item.variant.image;
-    if (item.product_image) return item.product_image;
-    return "https://via.placeholder.com/100";
+    const imageUrl =
+      item.variant?.image ||
+      item.product_image ||
+      item.variant?.product_image ||
+      item.variant?.product?.image ||
+      item.image ||
+      null;
+
+    return imageUrl || "https://via.placeholder.com/120/299e60/FFFFFF?text=Product";
   };
 
+  // ✅ FIXED: Get product name with fallbacks
   const getItemName = (item: any): string => {
-    return item.variant?.name || item.product_name || "Product";
+    return (
+      item.variant?.name ||
+      item.product_name ||
+      item.name ||
+      "Product"
+    );
   };
 
+  // ✅ Get product price
   const getItemPrice = (item: any): number => {
     return item.variant?.final_price || item.variant?.price || item.discounted_price || 0;
   };
@@ -92,71 +105,156 @@ export default function CartPage() {
     return item.total_price || item.discounted_price || (getItemPrice(item) * item.quantity);
   };
 
-  const renderCartItem = (item: any, index: number) => (
-    <View key={item.id} className="flex-row bg-white p-4 mx-4 mt-4 rounded-2xl shadow-sm">
-      {/* Product Image */}
-      <Image
-        source={{ uri: getItemImage(item) }}
-        className="w-24 h-24 rounded-xl bg-gray-100"
-        contentFit="cover"
-      />
+  // ✅ FIXED: Format variant attributes (handles Python dict format with single quotes)
+  const formatVariantAttributes = (attributes: any): string => {
+    if (!attributes) return '';
 
-      {/* Product Details */}
-      <View className="flex-1 ml-4">
-        <Text className="text-base font-semibold text-gray-800" numberOfLines={2}>
-          {getItemName(item)}
-        </Text>
+    let result = '';
 
-        {item.variant?.attributes && (
-          <Text className="text-sm text-gray-500 mt-1">{item.variant.attributes}</Text>
-        )}
+    // If it's a string
+    if (typeof attributes === 'string') {
+      // Check if it looks like a Python dict or JSON
+      if (attributes.includes('{') && attributes.includes(':')) {
+        try {
+          // ✅ FIX: Convert Python dict format to JSON format
+          // Replace single quotes with double quotes
+          const jsonString = attributes
+            .replace(/'/g, '"')  // Replace single quotes with double quotes
+            .replace(/None/g, 'null')  // Replace Python None with null
+            .replace(/True/g, 'true')  // Replace Python True with true
+            .replace(/False/g, 'false');  // Replace Python False with false
 
-        <Text className="text-lg font-bold text-main-700 mt-2">
-          {formatPrice(getItemPrice(item))}
-        </Text>
+          const parsed = JSON.parse(jsonString);
 
-        {/* Quantity Controls */}
-        <View className="flex-row items-center mt-3">
-          <TouchableOpacity
-            className="w-8 h-8 bg-gray-100 rounded-lg items-center justify-center"
-            onPress={() => handleDecrement(item.id)}
-            disabled={item.quantity <= 1 || isLoading}
-          >
-            <Ionicons
-              name="remove"
-              size={18}
-              color={item.quantity <= 1 ? "#ccc" : "#333"}
+          if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+            // Convert to "Size: 41mm, Color: Midnight" format
+            result = Object.entries(parsed)
+              .filter(([_, value]) => value !== null && value !== undefined && value !== '')
+              .map(([key, value]) => `${key}: ${value}`)
+              .join(', ');
+          } else {
+            result = jsonString.replace(/[{}"\[\]]/g, '');
+          }
+        } catch (error) {
+          console.log('⚠️ Cart - Parse error, cleaning string:', error);
+          // Failed to parse, clean it manually
+          result = attributes
+            .replace(/[{}'"\[\]]/g, '')  // Remove braces and quotes
+            .replace(/:/g, ': ')  // Add space after colons
+            .trim();
+        }
+      } else {
+        // Already a clean string
+        result = attributes;
+      }
+    }
+    // If it's already an object
+    else if (typeof attributes === 'object' && attributes !== null && !Array.isArray(attributes)) {
+      result = Object.entries(attributes)
+        .filter(([_, value]) => value !== null && value !== undefined && value !== '')
+        .map(([key, value]) => `${key}: ${value}`)
+        .join(', ');
+    }
+    // Fallback
+    else {
+      result = String(attributes).replace(/[{}'"\[\]]/g, '');
+    }
+
+    return result;
+  };
+
+  // ✅ FIXED: Modern cart item UI
+  const renderCartItem = (item: any, index: number) => {
+    const variantText = formatVariantAttributes(item.variant?.attributes);
+
+    return (
+      <View key={item.id} className="bg-white p-4 mx-4 mt-4 rounded-2xl shadow-sm border border-gray-100">
+        <View className="flex-row">
+          {/* ✅ Product Image - Left Side */}
+          <View className="shadow-md rounded-xl">
+            <Image
+              source={{ uri: getItemImage(item) }}
+              className="w-24 h-24 rounded-xl bg-gray-100"
+              contentFit="cover"
+              placeholder={require('@/assets/images/icon.png')}
             />
-          </TouchableOpacity>
+          </View>
 
-          <Text className="mx-4 text-base font-semibold text-gray-800">
-            {item.quantity}
-          </Text>
+          {/* ✅ Product Details - Right Side */}
+          <View className="flex-1 ml-4 justify-between">
+            <View>
+              {/* Product Name */}
+              <Text className="text-base font-semibold text-gray-800 leading-5" numberOfLines={2}>
+                {getItemName(item)}
+              </Text>
 
+              {/* ✅ Variant - Clean Text (NO raw JSON) */}
+              {variantText && (
+                <View className="mt-2 px-3 py-1.5 bg-green-50 rounded-lg border border-green-200 self-start">
+                  <Text className="text-xs text-green-700 font-medium">
+                    {variantText}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Price */}
+            <View>
+              <Text className="text-lg font-bold text-main-700 mt-2">
+                {formatPrice(getItemPrice(item))}
+              </Text>
+              <Text className="text-xs text-gray-500 mt-0.5">per unit</Text>
+            </View>
+          </View>
+
+          {/* Remove Button */}
           <TouchableOpacity
-            className="w-8 h-8 bg-main-600 rounded-lg items-center justify-center"
-            onPress={() => handleIncrement(item.id)}
+            className="absolute top-0 right-0 w-8 h-8 bg-red-50 rounded-full items-center justify-center"
+            onPress={() => handleRemove(item.id)}
             disabled={isLoading}
           >
-            <Ionicons name="add" size={18} color="#fff" />
+            <Ionicons name="trash-outline" size={16} color="#EF4444" />
           </TouchableOpacity>
+        </View>
 
-          <Text className="ml-auto text-base font-bold text-gray-800">
-            {formatPrice(getItemTotalPrice(item))}
-          </Text>
+        {/* ✅ Quantity Controls & Total - Bottom Row */}
+        <View className="flex-row items-center justify-between mt-4 pt-4 border-t border-gray-100">
+          <View className="flex-row items-center">
+            <TouchableOpacity
+              className="w-9 h-9 bg-gray-100 rounded-lg items-center justify-center"
+              onPress={() => handleDecrement(item.id)}
+              disabled={item.quantity <= 1 || isLoading}
+            >
+              <Ionicons
+                name="remove"
+                size={18}
+                color={item.quantity <= 1 ? "#ccc" : "#333"}
+              />
+            </TouchableOpacity>
+
+            <Text className="mx-5 text-base font-semibold text-gray-800 min-w-[24px] text-center">
+              {item.quantity}
+            </Text>
+
+            <TouchableOpacity
+              className="w-9 h-9 bg-main-600 rounded-lg items-center justify-center"
+              onPress={() => handleIncrement(item.id)}
+              disabled={isLoading}
+            >
+              <Ionicons name="add" size={18} color="#fff" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Total Price Badge */}
+          <View className="bg-main-600 px-4 py-2 rounded-lg">
+            <Text className="text-white font-bold text-base">
+              {formatPrice(getItemTotalPrice(item))}
+            </Text>
+          </View>
         </View>
       </View>
-
-      {/* Remove Button */}
-      <TouchableOpacity
-        className="absolute top-3 right-3 w-8 h-8 bg-red-50 rounded-full items-center justify-center"
-        onPress={() => handleRemove(item.id)}
-        disabled={isLoading}
-      >
-        <Ionicons name="trash-outline" size={18} color="#EF4444" />
-      </TouchableOpacity>
-    </View>
-  );
+    );
+  };
 
   const renderEmptyCart = () => (
     <View className="flex-1 items-center justify-center px-8">

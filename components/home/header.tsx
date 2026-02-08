@@ -1,14 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Image } from 'expo-image';
 
 export default function Header() {
   return (
-    <View 
+    <View
       className="flex-row items-center justify-between px-4 py-3"
       style={{ backgroundColor: '#f3faf2' }}
     >
-      <Text className="text-lg font-semibold text-[#299e60]">Sobarbazar</Text>
+      <Image
+        source={require('@/assets/images/logo.png')}
+        style={{ width: 120, height: 40 }}
+        contentFit="contain"
+      />
       
       {/* search input field */}
       <View className="flex-1 mx-3">

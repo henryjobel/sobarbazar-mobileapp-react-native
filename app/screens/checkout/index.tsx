@@ -143,19 +143,89 @@ export default function CheckoutScreen() {
     }
   };
 
-  // Get display values from cart item
+  // ✅ FIXED: Get product image with multiple fallbacks
   const getItemImage = (item: any): string => {
-    if (item.variant?.image) return item.variant.image;
-    if (item.product_image) return item.product_image;
-    return 'https://via.placeholder.com/60';
+    const imageUrl =
+      item.variant?.image ||
+      item.product_image ||
+      item.variant?.product_image ||
+      item.variant?.product?.image ||
+      item.image ||
+      null;
+
+    return imageUrl || 'https://via.placeholder.com/90/299e60/FFFFFF?text=Product';
   };
 
+  // ✅ FIXED: Get product name with fallbacks
   const getItemName = (item: any): string => {
-    return item.variant?.name || item.product_name || 'Product';
+    return (
+      item.variant?.name ||
+      item.product_name ||
+      item.name ||
+      'Product'
+    );
   };
 
   const getItemPrice = (item: any): number => {
     return item.variant?.final_price || item.variant?.price || item.discounted_price || 0;
+  };
+
+  // ✅ FIXED: Format variant attributes (handles Python dict format with single quotes)
+  const formatVariantAttributes = (attributes: any): string => {
+    if (!attributes) return '';
+
+    let result = '';
+
+    // If it's a string
+    if (typeof attributes === 'string') {
+      // Check if it looks like a Python dict or JSON
+      if (attributes.includes('{') && attributes.includes(':')) {
+        try {
+          // ✅ FIX: Convert Python dict format to JSON format
+          // Replace single quotes with double quotes
+          const jsonString = attributes
+            .replace(/'/g, '"')  // Replace single quotes with double quotes
+            .replace(/None/g, 'null')  // Replace Python None with null
+            .replace(/True/g, 'true')  // Replace Python True with true
+            .replace(/False/g, 'false');  // Replace Python False with false
+
+          const parsed = JSON.parse(jsonString);
+
+          if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+            // Convert to "Size: 41mm, Color: Midnight" format
+            result = Object.entries(parsed)
+              .filter(([_, value]) => value !== null && value !== undefined && value !== '')
+              .map(([key, value]) => `${key}: ${value}`)
+              .join(', ');
+          } else {
+            result = jsonString.replace(/[{}"\[\]]/g, '');
+          }
+        } catch (error) {
+          console.log('⚠️ Checkout - Parse error, cleaning string:', error);
+          // Failed to parse, clean it manually
+          result = attributes
+            .replace(/[{}'"\[\]]/g, '')  // Remove braces and quotes
+            .replace(/:/g, ': ')  // Add space after colons
+            .trim();
+        }
+      } else {
+        // Already a clean string
+        result = attributes;
+      }
+    }
+    // If it's already an object
+    else if (typeof attributes === 'object' && attributes !== null && !Array.isArray(attributes)) {
+      result = Object.entries(attributes)
+        .filter(([_, value]) => value !== null && value !== undefined && value !== '')
+        .map(([key, value]) => `${key}: ${value}`)
+        .join(', ');
+    }
+    // Fallback
+    else {
+      result = String(attributes).replace(/[{}'"\[\]]/g, '');
+    }
+
+    return result;
   };
 
   if (cartItems.length === 0) {
@@ -186,19 +256,31 @@ export default function CheckoutScreen() {
           <View style={styles.orderItems}>
             {cartItems.map((item) => (
               <View key={item.id} style={styles.orderItem}>
-                <Image
-                  source={{ uri: getItemImage(item) }}
-                  style={styles.itemImage}
-                  contentFit="cover"
-                />
+                <View style={styles.itemImageContainer}>
+                  <Image
+                    source={{ uri: getItemImage(item) }}
+                    style={styles.itemImage}
+                    contentFit="cover"
+                  />
+                </View>
                 <View style={styles.itemInfo}>
                   <Text style={styles.itemName} numberOfLines={2}>{getItemName(item)}</Text>
-                  {item.variant?.attributes && (
-                    <Text style={styles.itemVariant}>{item.variant.attributes}</Text>
-                  )}
+                  {(() => {
+                    const variantText = formatVariantAttributes(item.variant?.attributes);
+                    return variantText ? (
+                      <View style={styles.variantContainer}>
+                        <Text style={styles.itemVariant}>{variantText}</Text>
+                      </View>
+                    ) : null;
+                  })()}
                   <View style={styles.itemBottom}>
-                    <Text style={styles.itemPrice}>৳{getItemPrice(item).toLocaleString()}</Text>
-                    <Text style={styles.itemQty}>x{item.quantity}</Text>
+                    <View style={styles.priceContainer}>
+                      <Text style={styles.itemPrice}>৳{getItemPrice(item).toLocaleString()}</Text>
+                      <Text style={styles.itemQty}>Qty: {item.quantity}</Text>
+                    </View>
+                    <View style={styles.totalBadge}>
+                      <Text style={styles.totalBadgeText}>৳{(getItemPrice(item) * item.quantity).toLocaleString()}</Text>
+                    </View>
                   </View>
                 </View>
               </View>
@@ -500,44 +582,90 @@ const styles = StyleSheet.create({
   },
   orderItem: {
     flexDirection: 'row',
-    padding: 12,
-    backgroundColor: '#F9FAFB',
+    padding: 14,
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  itemImageContainer: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    borderRadius: 10,
   },
   itemImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 8,
-    backgroundColor: '#E5E7EB',
+    width: 90,
+    height: 90,
+    borderRadius: 10,
+    backgroundColor: '#F3F4F6',
   },
   itemInfo: {
     flex: 1,
-    marginLeft: 12,
+    marginLeft: 14,
+    justifyContent: 'space-between',
   },
   itemName: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
     color: '#1F2937',
+    lineHeight: 20,
+  },
+  variantContainer: {
+    marginTop: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: '#F0FDF4',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    alignSelf: 'flex-start',
   },
   itemVariant: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 2,
+    fontSize: 11,
+    color: '#15803D',
+    fontWeight: '500',
+  },
+  itemVariantLabel: {
+    fontWeight: '700',
   },
   itemBottom: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     marginTop: 8,
   },
+  priceContainer: {
+    flex: 1,
+  },
   itemPrice: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     color: '#299e60',
+    marginBottom: 2,
   },
   itemQty: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#6B7280',
+    fontWeight: '500',
+  },
+  totalBadge: {
+    backgroundColor: '#299e60',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  totalBadgeText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   inputGroup: {
     marginBottom: 16,

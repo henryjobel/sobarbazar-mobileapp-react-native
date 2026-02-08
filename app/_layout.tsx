@@ -4,6 +4,7 @@ import 'react-native-reanimated';
 import './globals.css';
 
 import { AppProviders } from '@/context';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -11,12 +12,13 @@ export const unstable_settings = {
 
 export default function RootLayout() {
   return (
-    <AppProviders>
-      <Stack
-        screenOptions={{
-          headerShown: false,
-        }}
-      >
+    <ErrorBoundary>
+      <AppProviders>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+          }}
+        >
           {/* Main Screens */}
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="(routes)/login" options={{ headerShown: false }} />
@@ -172,5 +174,6 @@ export default function RootLayout() {
         </Stack>
         <StatusBar style="auto" />
       </AppProviders>
+    </ErrorBoundary>
   );
 }
