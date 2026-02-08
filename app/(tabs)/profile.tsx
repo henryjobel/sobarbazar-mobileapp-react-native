@@ -17,7 +17,7 @@ const menuItems = [
     iconColor: "#3B82F6",
     iconBg: "#DBEAFE",
     section: "quick",
-    onPress: () => router.push("/(routes)/my-oders")
+    onPress: () => router.push("/(routes)/my-orders")
   },
   {
     id: "wishlist",
@@ -150,7 +150,7 @@ export default function ProfileScreen() {
   if (isLoading) {
     return (
       <SafeAreaView className='flex-1 bg-gray-50 items-center justify-center'>
-        <ActivityIndicator size="large" color="#22C55E" />
+        <ActivityIndicator size="large" color="#299e60" />
         <Text className='text-gray-600 mt-4'>Loading...</Text>
       </SafeAreaView>
     );
@@ -178,7 +178,7 @@ export default function ProfileScreen() {
           </Text>
 
           <TouchableOpacity
-            className='bg-green-500 rounded-2xl py-4 px-12 shadow-lg shadow-green-200 w-full'
+            className='bg-main-600 rounded-2xl py-4 px-12 shadow-lg shadow-main-200 w-full'
             onPress={handleLogin}
           >
             <Text className='text-white text-center text-lg font-semibold'>Sign In</Text>
@@ -189,7 +189,7 @@ export default function ProfileScreen() {
             onPress={() => router.push('/(routes)/signup')}
           >
             <Text className='text-gray-600'>
-              Don't have an account? <Text className='text-green-600 font-semibold'>Sign Up</Text>
+              Don't have an account? <Text className='text-main-700 font-semibold'>Sign Up</Text>
             </Text>
           </TouchableOpacity>
         </View>
@@ -221,13 +221,13 @@ export default function ProfileScreen() {
                     resizeMode='cover'
                   />
                 ) : (
-                  <View className='w-24 h-24 rounded-full border-4 border-white shadow-lg bg-green-100 items-center justify-center'>
-                    <Text className='text-green-600 text-3xl font-bold'>
+                  <View className='w-24 h-24 rounded-full border-4 border-white shadow-lg bg-main-100 items-center justify-center'>
+                    <Text className='text-main-700 text-3xl font-bold'>
                       {getUserName().charAt(0).toUpperCase()}
                     </Text>
                   </View>
                 )}
-                <TouchableOpacity className='absolute bottom-1 right-1 w-8 h-8 bg-green-500 rounded-full items-center justify-center border-2 border-white shadow-lg'>
+                <TouchableOpacity className='absolute bottom-1 right-1 w-8 h-8 bg-main-600 rounded-full items-center justify-center border-2 border-white shadow-lg'>
                   <Ionicons name='camera' size={14} color="#fff" />
                 </TouchableOpacity>
               </View>

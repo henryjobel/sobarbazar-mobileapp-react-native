@@ -67,7 +67,11 @@ interface ProductType {
   }[];
 }
 
-const Products = () => {
+interface ProductsProps {
+  recommendedProducts?: ProductType[];
+}
+
+const Products = ({ recommendedProducts }: ProductsProps) => {
   const router = useRouter();
   const { addItem, itemCount } = useCart();
   const { isInWishlist, addToWishlist, removeFromWishlist } = useWishlist();
@@ -284,26 +288,65 @@ const Products = () => {
     }
   };
 
+  // Base URL for images
+  const BASE_URL = 'https://api.hetdcl.com';
+
+  // Ensure URL is absolute
+  const ensureAbsoluteUrl = (url: string | undefined | null): string | null => {
+    if (!url) return null;
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+    // Handle relative URLs
+    if (url.startsWith('/')) {
+      return `${BASE_URL}${url}`;
+    }
+    return `${BASE_URL}/${url}`;
+  };
+
   // Get image URL - handle backend structure
   const getImageUrl = (item: ProductType): string => {
+    let imageUrl: string | null = null;
+
     // Try default_variant image first
     if (item.default_variant?.image) {
-      return item.default_variant.image;
+      imageUrl = ensureAbsoluteUrl(item.default_variant.image);
+      if (imageUrl) return imageUrl;
     }
 
     // Try images array
     if (item.images && item.images.length > 0) {
       const firstImage = item.images[0];
       if (typeof firstImage === 'string') {
-        return firstImage;
+        imageUrl = ensureAbsoluteUrl(firstImage);
       } else if (firstImage?.image) {
-        return firstImage.image;
+        imageUrl = ensureAbsoluteUrl(firstImage.image);
       }
+      if (imageUrl) return imageUrl;
     }
 
     // Try first variant image
     if (item.variants && item.variants.length > 0 && item.variants[0]?.image) {
-      return item.variants[0].image;
+      imageUrl = ensureAbsoluteUrl(item.variants[0].image);
+      if (imageUrl) return imageUrl;
+    }
+
+    // Try supplier_product image (some API responses nest images here)
+    const supplierProduct = (item as any).supplier_product;
+    if (supplierProduct?.images && supplierProduct.images.length > 0) {
+      const spImage = supplierProduct.images[0];
+      if (typeof spImage === 'string') {
+        imageUrl = ensureAbsoluteUrl(spImage);
+      } else if (spImage?.image) {
+        imageUrl = ensureAbsoluteUrl(spImage.image);
+      }
+      if (imageUrl) return imageUrl;
+    }
+
+    // Try direct image field
+    if ((item as any).image) {
+      imageUrl = ensureAbsoluteUrl((item as any).image);
+      if (imageUrl) return imageUrl;
     }
 
     return 'https://via.placeholder.com/300x300/cccccc/969696?text=No+Image';

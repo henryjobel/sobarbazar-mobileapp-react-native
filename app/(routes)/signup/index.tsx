@@ -24,6 +24,7 @@ export default function SignupScreen() {
     fullName: '',
     email: '',
     phone: '',
+    address: '',
     password: '',
     confirmPassword: '',
     agreeToTerms: false,
@@ -32,6 +33,7 @@ export default function SignupScreen() {
     fullName: '',
     email: '',
     phone: '',
+    address: '',
     password: '',
     confirmPassword: '',
     agreeToTerms: '',
@@ -43,6 +45,7 @@ export default function SignupScreen() {
       fullName: '',
       email: '',
       phone: '',
+      address: '',
       password: '',
       confirmPassword: '',
       agreeToTerms: '',
@@ -66,6 +69,11 @@ export default function SignupScreen() {
       isValid = false;
     } else if (!/^01[3-9]\d{8}$/.test(formData.phone.replace(/\s/g, ''))) {
       newErrors.phone = 'Please enter a valid Bangladesh phone number';
+      isValid = false;
+    }
+
+    if (!formData.address.trim()) {
+      newErrors.address = 'Address is required';
       isValid = false;
     }
 
@@ -109,6 +117,7 @@ export default function SignupScreen() {
       last_name: lastName,
       phone: formData.phone,
       name: formData.fullName,
+      shipping_address: formData.address,
     });
 
     if (result.success) {
@@ -152,7 +161,7 @@ export default function SignupScreen() {
         >
           {/* Header Section */}
           <View className="items-center pt-10 pb-4">
-            <View className="w-16 h-16 bg-green-500 rounded-2xl items-center justify-center mb-3 shadow-lg shadow-green-200">
+            <View className="w-16 h-16 bg-main-600 rounded-2xl items-center justify-center mb-3 shadow-lg shadow-main-200">
               <Text className="text-white text-xl font-bold">SB</Text>
             </View>
             <Text className="text-2xl font-bold text-gray-800 mb-1">Create Account</Text>
@@ -250,6 +259,34 @@ export default function SignupScreen() {
               ) : null}
             </View>
 
+            {/* Address Input */}
+            <View className="mb-4">
+              <Text className="text-gray-700 text-sm font-medium mb-2">Shipping Address</Text>
+              <View
+                className={`flex-row items-center bg-gray-50 rounded-2xl px-4 py-3.5 border ${
+                  errors.address ? 'border-red-400' : 'border-gray-200'
+                }`}
+              >
+                <Ionicons name="location-outline" size={20} color={errors.address ? '#F87171' : '#6B7280'} />
+                <TextInput
+                  className="flex-1 ml-3 text-gray-800 text-base"
+                  placeholder="Enter your address"
+                  placeholderTextColor="#9CA3AF"
+                  value={formData.address}
+                  onChangeText={(text) => {
+                    setFormData({ ...formData, address: text });
+                    clearError('address');
+                  }}
+                  autoCapitalize="words"
+                  editable={!isLoading}
+                  multiline
+                />
+              </View>
+              {errors.address ? (
+                <Text className="text-red-500 text-xs mt-1 ml-1">{errors.address}</Text>
+              ) : null}
+            </View>
+
             {/* Password Input */}
             <View className="mb-4">
               <Text className="text-gray-700 text-sm font-medium mb-2">Password</Text>
@@ -341,15 +378,15 @@ export default function SignupScreen() {
               >
                 <View
                   className={`w-5 h-5 border-2 rounded mr-3 mt-0.5 items-center justify-center ${
-                    formData.agreeToTerms ? 'bg-green-500 border-green-500' : 'border-gray-300'
+                    formData.agreeToTerms ? 'bg-main-600 border-main-600' : 'border-gray-300'
                   }`}
                 >
                   {formData.agreeToTerms && <Ionicons name="checkmark" size={14} color="white" />}
                 </View>
                 <Text className="text-gray-600 text-sm flex-1">
                   I agree to the{' '}
-                  <Text className="text-green-600 font-medium">Terms of Service</Text> and{' '}
-                  <Text className="text-green-600 font-medium">Privacy Policy</Text>
+                  <Text className="text-main-700 font-medium">Terms of Service</Text> and{' '}
+                  <Text className="text-main-700 font-medium">Privacy Policy</Text>
                 </Text>
               </TouchableOpacity>
               {errors.agreeToTerms ? (
@@ -359,8 +396,8 @@ export default function SignupScreen() {
 
             {/* Signup Button */}
             <TouchableOpacity
-              className={`rounded-2xl py-4 mb-5 shadow-lg shadow-green-200 ${
-                isLoading ? 'bg-green-400' : 'bg-green-500'
+              className={`rounded-2xl py-4 mb-5 shadow-lg shadow-main-200 ${
+                isLoading ? 'bg-main-400' : 'bg-main-600'
               }`}
               onPress={handleSignup}
               disabled={isLoading}
@@ -405,7 +442,7 @@ export default function SignupScreen() {
             <View className="flex-row justify-center mb-6">
               <Text className="text-gray-600">Already have an account? </Text>
               <TouchableOpacity onPress={handleLogin} disabled={isLoading}>
-                <Text className="text-green-600 font-semibold">Sign In</Text>
+                <Text className="text-main-700 font-semibold">Sign In</Text>
               </TouchableOpacity>
             </View>
           </View>

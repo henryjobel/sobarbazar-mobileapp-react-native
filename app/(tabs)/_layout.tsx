@@ -51,7 +51,7 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#22C55E',
+        tabBarActiveTintColor: '#299e60',
         tabBarInactiveTintColor: '#6B7280',
         tabBarStyle: styles.tabBar,
         tabBarItemStyle: styles.tabBarItem,
@@ -79,15 +79,15 @@ export default function TabLayout() {
         }}
       />
 
-      {/* Categories Tab */}
+      {/* Shop Tab - Main product listing */}
       <Tabs.Screen
-        name="categories"
+        name="shop"
         options={{
-          title: 'Categories',
+          title: 'Shop',
           tabBarIcon: ({ color, focused }) => (
             <TabIcon
-              name="grid-outline"
-              focusedName="grid"
+              name="storefront-outline"
+              focusedName="storefront"
               color={color}
               focused={focused}
             />
@@ -109,7 +109,7 @@ export default function TabLayout() {
                 <Ionicons
                   name={focused ? 'cart' : 'cart-outline'}
                   size={26}
-                  color={focused ? '#fff' : '#22C55E'}
+                  color={focused ? '#fff' : '#299e60'}
                 />
                 {cartCount > 0 && (
                   <View style={styles.cartBadge}>
@@ -168,6 +168,13 @@ export default function TabLayout() {
       />
 
       {/* Hidden tabs - accessible but not in tab bar */}
+      <Tabs.Screen
+        name="categories"
+        options={{
+          href: null, // Hide from tab bar - accessible via Shop filters
+        }}
+      />
+
       <Tabs.Screen
         name="deals"
         options={{
@@ -249,14 +256,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 3,
     borderColor: '#fff',
-    shadowColor: '#22C55E',
+    shadowColor: '#299e60',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
   },
   cartIconBackgroundActive: {
-    backgroundColor: '#22C55E',
+    backgroundColor: '#299e60',
   },
   cartBadge: {
     position: 'absolute',

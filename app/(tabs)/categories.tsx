@@ -76,12 +76,12 @@ export default function CategoriesScreen() {
     if (category.subcategories && category.subcategories.length > 0) {
       setSelectedCategory(category);
     } else {
-      router.push(`/screens/shop?category=${category.id}&name=${encodeURIComponent(category.name)}`);
+      router.push(`/(tabs)/shop?category=${category.id}&name=${encodeURIComponent(category.name)}`);
     }
   };
 
   const handleSubcategoryPress = (subcategory: Category) => {
-    router.push(`/screens/shop?category=${subcategory.id}&name=${encodeURIComponent(subcategory.name)}`);
+    router.push(`/(tabs)/shop?category=${subcategory.id}&name=${encodeURIComponent(subcategory.name)}`);
   };
 
   const getCategoryImage = (category: Category): string => {
@@ -95,7 +95,7 @@ export default function CategoriesScreen() {
     return (
       <SafeAreaView className="flex-1 bg-gray-50">
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#22C55E" />
+          <ActivityIndicator size="large" color="#299e60" />
           <Text className="text-gray-500 mt-4">Loading categories...</Text>
         </View>
       </SafeAreaView>
@@ -127,7 +127,7 @@ export default function CategoriesScreen() {
         <ScrollView className="flex-1 px-4 pt-4" showsVerticalScrollIndicator={false}>
           {/* All products in category */}
           <TouchableOpacity
-            className="bg-green-500 rounded-2xl p-4 mb-4 flex-row items-center"
+            className="bg-main-600 rounded-2xl p-4 mb-4 flex-row items-center"
             onPress={() => router.push(`/screens/shop?category=${selectedCategory.id}&name=${encodeURIComponent(selectedCategory.name)}`)}
             activeOpacity={0.8}
           >
@@ -206,18 +206,18 @@ export default function CategoriesScreen() {
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={onRefresh}
-            colors={['#22C55E']}
-            tintColor="#22C55E"
+            colors={['#299e60']}
+            tintColor="#299e60"
           />
         }
       >
         {/* Featured Category Banner */}
         <TouchableOpacity
-          className="mx-4 mt-4 bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl overflow-hidden"
+          className="mx-4 mt-4 bg-gradient-to-r from-main-600 to-emerald-600 rounded-2xl overflow-hidden"
           onPress={() => router.push('/screens/shop')}
           activeOpacity={0.9}
         >
-          <View className="bg-green-500 p-5 flex-row items-center">
+          <View className="bg-main-600 p-5 flex-row items-center">
             <View className="flex-1">
               <Text className="text-white/80 text-sm font-medium">Explore All</Text>
               <Text className="text-white text-xl font-bold mt-1">Shop All Products</Text>
@@ -262,7 +262,7 @@ export default function CategoriesScreen() {
 
                   {/* Subcategories badge */}
                   {category.subcategories && category.subcategories.length > 0 && (
-                    <View className="absolute top-2 right-2 bg-green-500 px-2 py-1 rounded-lg">
+                    <View className="absolute top-2 right-2 bg-main-600 px-2 py-1 rounded-lg">
                       <Text className="text-white text-xs font-bold">
                         {category.subcategories.length} sub
                       </Text>
@@ -282,8 +282,8 @@ export default function CategoriesScreen() {
                       </Text>
                     )}
                     <View className="flex-row items-center">
-                      <Text className="text-green-500 text-xs font-semibold">View</Text>
-                      <Ionicons name="chevron-forward" size={14} color="#22C55E" />
+                      <Text className="text-main-600 text-xs font-semibold">View</Text>
+                      <Ionicons name="chevron-forward" size={14} color="#299e60" />
                     </View>
                   </View>
                 </View>

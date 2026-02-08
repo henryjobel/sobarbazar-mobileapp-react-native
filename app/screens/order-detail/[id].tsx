@@ -21,65 +21,62 @@ interface OrderItem {
   product: {
     id: number;
     name: string;
-    image: string;
-    slug?: string;
   };
   variant?: {
+    id: number;
     name: string;
-    value: string;
+    sku: string;
+    image?: string;
   };
   quantity: number;
-  price: number;
-  subtotal: number;
+  original_unit_price: number;
+  final_unit_price: number;
+  discount_amount: number;
+  net_price: number;
+  product_title?: string;
+  product_image?: string;
+  sku?: string;
+  price?: number;
+  subtotal?: number;
 }
 
 interface Order {
   id: number;
   order_number: string;
-  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
-  payment_status: 'pending' | 'paid' | 'failed' | 'refunded';
+  status: 'Placed' | 'Paid' | 'Confirmed' | 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled';
   payment_method: string;
   subtotal: number;
-  shipping_charge: number;
+  deliver_charge: number;
   discount: number;
   total_amount: number;
-  created_at: string;
-  updated_at: string;
+  order_date: string;
+  created_at?: string;
+  updated_at?: string;
   items: OrderItem[];
-  shipping_address: {
-    full_name: string;
-    phone: string;
-    email?: string;
-    address: string;
-    city: string;
-    area?: string;
-    postal_code?: string;
-  };
+  shipping_address: string;
+  coupon_discount?: number;
   tracking_number?: string;
   estimated_delivery?: string;
   notes?: string;
 }
 
-const STATUS_CONFIG = {
-  pending: { color: '#F59E0B', bg: '#FEF3C7', label: 'Pending', icon: 'time-outline' },
-  processing: { color: '#3B82F6', bg: '#DBEAFE', label: 'Processing', icon: 'reload-outline' },
-  shipped: { color: '#8B5CF6', bg: '#EDE9FE', label: 'Shipped', icon: 'car-outline' },
-  delivered: { color: '#10B981', bg: '#D1FAE5', label: 'Delivered', icon: 'checkmark-circle-outline' },
-  cancelled: { color: '#EF4444', bg: '#FEE2E2', label: 'Cancelled', icon: 'close-circle-outline' },
-};
-
-const PAYMENT_STATUS_CONFIG = {
-  pending: { color: '#F59E0B', label: 'Payment Pending' },
-  paid: { color: '#10B981', label: 'Paid' },
-  failed: { color: '#EF4444', label: 'Payment Failed' },
-  refunded: { color: '#6B7280', label: 'Refunded' },
+const STATUS_CONFIG: { [key: string]: any } = {
+  Placed: { color: '#F59E0B', bg: '#FEF3C7', label: 'Placed', icon: 'time-outline' },
+  Paid: { color: '#10B981', bg: '#D1FAE5', label: 'Paid', icon: 'checkmark-circle-outline' },
+  Confirmed: { color: '#3B82F6', bg: '#DBEAFE', label: 'Confirmed', icon: 'checkmark-done-outline' },
+  Processing: { color: '#3B82F6', bg: '#DBEAFE', label: 'Processing', icon: 'reload-outline' },
+  Shipped: { color: '#8B5CF6', bg: '#EDE9FE', label: 'Shipped', icon: 'car-outline' },
+  Delivered: { color: '#10B981', bg: '#D1FAE5', label: 'Delivered', icon: 'checkmark-circle-outline' },
+  Cancelled: { color: '#EF4444', bg: '#FEE2E2', label: 'Cancelled', icon: 'close-circle-outline' },
 };
 
 const ORDER_TIMELINE = [
-  { key: 'pending', label: 'Order Placed', icon: 'receipt-outline' },
-  { key: 'processing', label: 'Processing', icon: 'cube-outline' },
-  { key: 'shipped', label: 'Shipped', icon: 'car-outline' },
-  { key: 'delivered', label: 'Delivered', icon: 'checkmark-circle-outline' },
+  { key: 'Placed', label: 'Order Placed', icon: 'receipt-outline' },
+  { key: 'Paid', label: 'Payment Confirmed', icon: 'checkmark-circle-outline' },
+  { key: 'Confirmed', label: 'Order Confirmed', icon: 'checkmark-done-outline' },
+  { key: 'Processing', label: 'Processing', icon: 'cube-outline' },
+  { key: 'Shipped', label: 'Shipped', icon: 'car-outline' },
+  { key: 'Delivered', label: 'Delivered', icon: 'checkmark-circle-outline' },
 ];
 
 export default function OrderDetailScreen() {
@@ -129,14 +126,14 @@ export default function OrderDetailScreen() {
   };
 
   const getStatusIndex = (status: string) => {
-    if (status === 'cancelled') return -1;
+    if (status === 'Cancelled') return -1;
     return ORDER_TIMELINE.findIndex(item => item.key === status);
   };
 
   const handleCall = () => {
-    if (order?.shipping_address?.phone) {
-      Linking.openURL(`tel:${order.shipping_address.phone}`);
-    }
+    // Phone number not available in order response
+    // If needed, contact customer support
+    console.log('Phone contact not available in order details');
   };
 
   const handleTrackOrder = () => {
@@ -188,9 +185,8 @@ export default function OrderDetailScreen() {
     );
   }
 
-  const statusConfig = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending;
-  const paymentConfig = PAYMENT_STATUS_CONFIG[order.payment_status] || PAYMENT_STATUS_CONFIG.pending;
-  const currentStatusIndex = getStatusIndex(order.status);
+  const statusConfig = STATUS_CONFIG[order.status] || STATUS_CONFIG.Placed;
+  const currentStatusIndex = getStatusIndex(order.status.toLowerCase());
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -224,7 +220,7 @@ export default function OrderDetailScreen() {
             {statusConfig.label}
           </Text>
           <Text style={styles.statusDate}>
-            {order.status === 'delivered' ? 'Delivered on' : 'Last updated'}: {formatDate(order.updated_at)}
+            {order.status === 'Delivered' ? 'Delivered on' : 'Ordered on'}: {formatDate(order.order_date || order.created_at || '')}
           </Text>
           {order.estimated_delivery && order.status !== 'delivered' && order.status !== 'cancelled' && (
             <Text style={styles.estimatedDelivery}>
@@ -285,7 +281,7 @@ export default function OrderDetailScreen() {
         )}
 
         {/* Tracking Info */}
-        {order.tracking_number && order.status === 'shipped' && (
+        {order.tracking_number && order.status === 'Shipped' && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Tracking Information</Text>
             <View style={styles.trackingCard}>
@@ -345,19 +341,9 @@ export default function OrderDetailScreen() {
               <View style={styles.addressIconContainer}>
                 <Ionicons name="location-outline" size={20} color="#3B82F6" />
               </View>
-              <View style={styles.addressInfo}>
-                <Text style={styles.addressName}>{order.shipping_address?.full_name}</Text>
-                <Text style={styles.addressPhone}>{order.shipping_address?.phone}</Text>
-              </View>
-              <TouchableOpacity style={styles.callButton} onPress={handleCall}>
-                <Ionicons name="call-outline" size={20} color="#10B981" />
-              </TouchableOpacity>
             </View>
             <Text style={styles.addressText}>
-              {order.shipping_address?.address}
-              {order.shipping_address?.area ? `, ${order.shipping_address.area}` : ''}
-              {order.shipping_address?.city ? `, ${order.shipping_address.city}` : ''}
-              {order.shipping_address?.postal_code ? ` - ${order.shipping_address.postal_code}` : ''}
+              {order.shipping_address}
             </Text>
           </View>
         </View>
@@ -384,8 +370,8 @@ export default function OrderDetailScreen() {
               <Text style={styles.summaryValue}>{formatPrice(order.subtotal)}</Text>
             </View>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Shipping</Text>
-              <Text style={styles.summaryValue}>{formatPrice(order.shipping_charge)}</Text>
+              <Text style={styles.summaryLabel}>Delivery Charge</Text>
+              <Text style={styles.summaryValue}>{formatPrice(order.deliver_charge)}</Text>
             </View>
             {order.discount > 0 && (
               <View style={styles.summaryRow}>
@@ -413,7 +399,7 @@ export default function OrderDetailScreen() {
 
         {/* Action Buttons */}
         <View style={styles.actionButtons}>
-          {order.status === 'delivered' && (
+          {order.status === 'Delivered' && (
             <TouchableOpacity
               style={styles.reorderButton}
               onPress={() => router.push('/(tabs)')}

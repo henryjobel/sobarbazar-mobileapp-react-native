@@ -40,6 +40,7 @@ interface RegisterData {
   last_name?: string;
   phone?: string;
   name?: string;
+  shipping_address?: string;
 }
 
 interface AuthContextType extends AuthState {

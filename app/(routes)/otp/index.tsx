@@ -92,14 +92,14 @@ export default function OTPVerificationScreen() {
       <View className="flex-1 px-6">
         {/* Header */}
         <View className="items-center pt-12 pb-8">
-          <View className="w-16 h-16 bg-green-500 rounded-2xl items-center justify-center mb-4">
+          <View className="w-16 h-16 bg-main-600 rounded-2xl items-center justify-center mb-4">
             <Ionicons name="lock-closed" size={24} color="white" />
           </View>
           <Text className="text-2xl font-bold text-gray-800 mb-2">Verify OTP</Text>
           <Text className="text-gray-600 text-center">
             We've sent a 6-digit code to
           </Text>
-          <Text className="text-green-600 font-semibold mt-1">
+          <Text className="text-main-700 font-semibold mt-1">
             {params.phone || params.email}
           </Text>
         </View>
@@ -135,7 +135,7 @@ export default function OTPVerificationScreen() {
 
         {/* Verify Button */}
         <TouchableOpacity
-          className="bg-green-500 rounded-2xl py-4 mb-6 shadow-lg shadow-green-200"
+          className="bg-main-600 rounded-2xl py-4 mb-6 shadow-lg shadow-main-200"
           onPress={handleVerify}
         >
           <Text className="text-white text-center text-lg font-semibold">Verify & Create Account</Text>
@@ -145,7 +145,7 @@ export default function OTPVerificationScreen() {
         <View className="items-center">
           {canResend ? (
             <TouchableOpacity onPress={resendOtp}>
-              <Text className="text-green-600 font-semibold">Resend OTP</Text>
+              <Text className="text-main-700 font-semibold">Resend OTP</Text>
             </TouchableOpacity>
           ) : (
             <Text className="text-gray-500">
@@ -159,7 +159,7 @@ export default function OTPVerificationScreen() {
           className="absolute bottom-8 left-6 right-6"
           onPress={() => router.back()}
         >
-          <Text className="text-green-600 text-center font-semibold">
+          <Text className="text-main-700 text-center font-semibold">
             ← Back to Sign Up
           </Text>
         </TouchableOpacity>

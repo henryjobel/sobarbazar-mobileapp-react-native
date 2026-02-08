@@ -1,5 +1,6 @@
 import BigSaleBannerr from '@/components/home/banner';
 import Category from '@/components/home/Category';
+import DealsSection from '@/components/home/DealsSection';
 import FeaturedSection from '@/components/home/FeaturedSection';
 import FlashSaleSection from '@/components/home/FlashSaleSection';
 import Header from '@/components/home/header';
@@ -96,7 +97,7 @@ export default function HomeScreen() {
   if (isLoading) {
     return (
       <SafeAreaView className="flex-1 bg-white items-center justify-center">
-        <ActivityIndicator size="large" color="#22C55E" />
+        <ActivityIndicator size="large" color="#299e60" />
         <Text className="text-gray-500 mt-4">Loading amazing products...</Text>
       </SafeAreaView>
     );
@@ -117,8 +118,8 @@ export default function HomeScreen() {
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={onRefresh}
-            colors={['#22C55E']}
-            tintColor="#22C55E"
+            colors={['#299e60']}
+            tintColor="#299e60"
           />
         }
         contentContainerStyle={{ paddingBottom: 100 }}
@@ -136,11 +137,14 @@ export default function HomeScreen() {
           bannerSection={bannerMap?.FlashSales}
         />
 
+        {/* Special Deals Section */}
+        <DealsSection />
+
         {/* New Arrivals Section */}
         <NewArrivalsSection
           products={newArrivals}
           title="New Arrivals"
-          onViewAll={() => router.push('/screens/shop')}
+          onViewAll={() => router.push('/(tabs)/shop')}
         />
 
         {/* Featured Section with Quick Actions */}
@@ -151,18 +155,18 @@ export default function HomeScreen() {
 
         {/* Promo Banner */}
         <TouchableOpacity
-          className="mx-4 mt-6 bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl overflow-hidden"
-          onPress={() => router.push('/screens/shop')}
+          className="mx-4 mt-6 bg-main-600 rounded-2xl overflow-hidden"
+          onPress={() => router.push('/(tabs)/shop')}
           activeOpacity={0.9}
         >
-          <View className="bg-green-500 p-5">
+          <View className="bg-main-600 p-5">
             <View className="flex-row items-center">
               <View className="flex-1">
                 <Text className="text-white/80 text-sm">Special Offer</Text>
                 <Text className="text-white text-2xl font-bold mt-1">Free Delivery</Text>
                 <Text className="text-white/90 text-sm mt-1">On your first order above ৳500</Text>
                 <View className="bg-white mt-3 px-4 py-2 rounded-lg self-start">
-                  <Text className="text-green-600 font-bold">Shop Now</Text>
+                  <Text className="text-main-600 font-bold">Shop Now</Text>
                 </View>
               </View>
               <View className="w-20 h-20 bg-white/20 rounded-full items-center justify-center">
@@ -176,8 +180,8 @@ export default function HomeScreen() {
         <View className="mt-6">
           <View className="px-4 flex-row items-center justify-between mb-4">
             <View className="flex-row items-center">
-              <View className="w-10 h-10 bg-green-100 rounded-xl items-center justify-center mr-3">
-                <Ionicons name="cube" size={20} color="#22C55E" />
+              <View className="w-10 h-10 bg-main-100 rounded-xl items-center justify-center mr-3">
+                <Ionicons name="cube" size={20} color="#299e60" />
               </View>
               <View>
                 <Text className="text-lg font-bold text-gray-800">All Products</Text>
@@ -185,11 +189,11 @@ export default function HomeScreen() {
               </View>
             </View>
             <TouchableOpacity
-              className="flex-row items-center bg-green-50 px-3 py-2 rounded-lg"
-              onPress={() => router.push('/screens/shop')}
+              className="flex-row items-center bg-main-50 px-3 py-2 rounded-lg"
+              onPress={() => router.push('/(tabs)/shop')}
             >
-              <Text className="text-green-600 font-semibold text-sm mr-1">View All</Text>
-              <Ionicons name="arrow-forward" size={16} color="#22C55E" />
+              <Text className="text-main-600 font-semibold text-sm mr-1">View All</Text>
+              <Ionicons name="arrow-forward" size={16} color="#299e60" />
             </TouchableOpacity>
           </View>
         </View>
@@ -201,7 +205,7 @@ export default function HomeScreen() {
         {/* Newsletter Section */}
         <View className="mx-4 mt-6 mb-8 bg-gray-800 rounded-2xl p-6">
           <View className="items-center">
-            <View className="w-14 h-14 bg-green-500 rounded-full items-center justify-center mb-4">
+            <View className="w-14 h-14 bg-main-600 rounded-full items-center justify-center mb-4">
               <Ionicons name="mail-outline" size={28} color="#fff" />
             </View>
             <Text className="text-white text-xl font-bold text-center">Stay Updated</Text>
@@ -209,7 +213,7 @@ export default function HomeScreen() {
               Get exclusive offers, new arrivals, and more delivered to your inbox
             </Text>
             <TouchableOpacity
-              className="bg-green-500 px-6 py-3 rounded-xl mt-4"
+              className="bg-main-600 px-6 py-3 rounded-xl mt-4"
               activeOpacity={0.8}
             >
               <Text className="text-white font-semibold">Subscribe Now</Text>

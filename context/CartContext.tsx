@@ -11,6 +11,8 @@ import {
   clearCart as apiClearCart,
   createOrder as apiCreateOrder,
 } from '@/utils/api';
+import { getUserData } from '@/hooks/useUser';
+import GuestCheckoutModal from '@/components/ui/GuestCheckoutModal';
 
 // Types matching backend structure
 interface ProductVariant {
@@ -110,6 +112,7 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 
 // Storage Keys
 const CART_ID_KEY = 'cart_id';
+const GUEST_MODE_KEY = 'guest_mode';
 
 // Provider Component
 export function CartProvider({ children }: { children: ReactNode }) {
@@ -117,6 +120,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [cartId, setCartId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [shippingArea, setShippingAreaState] = useState<'IN' | 'OUT'>('IN');
+  const [showGuestModal, setShowGuestModal] = useState(false);
+  const [isGuestMode, setIsGuestMode] = useState(false);
+  const [pendingAddItem, setPendingAddItem] = useState<{
+    product: any;
+    quantity: number;
+    variant?: any;
+  } | null>(null);
 
   // Calculate derived values
   const itemCount = cart?.items?.reduce((sum, item) => sum + item.quantity, 0) || 0;
@@ -129,7 +139,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
   // Initialize cart on mount
   useEffect(() => {
     initializeCart();
+    loadGuestMode();
   }, []);
+
+  const loadGuestMode = async () => {
+    try {
+      const guestMode = await SecureStore.getItemAsync(GUEST_MODE_KEY);
+      setIsGuestMode(guestMode === 'true');
+    } catch (error) {
+      console.error('Error loading guest mode:', error);
+    }
+  };
 
   const initializeCart = useCallback(async () => {
     try {
@@ -195,6 +215,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [cartId, initializeCart]);
 
   const addItem = useCallback(async (product: any, quantity: number = 1, variant?: any): Promise<boolean> => {
+    // Check if user is authenticated or in guest mode
+    const user = await getUserData();
+    if (!user && !isGuestMode) {
+      console.log('🔒 CartContext: User not authenticated, showing guest modal...');
+      setPendingAddItem({ product, quantity, variant });
+      setShowGuestModal(true);
+      return false;
+    }
+
     try {
       setIsLoading(true);
       console.log('➕ CartContext: Adding item to cart...');
@@ -251,7 +280,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [cartId, refreshCart]);
+  }, [cartId, refreshCart, isGuestMode]);
 
   const updateQuantity = useCallback(async (itemId: number, quantity: number): Promise<boolean> => {
     if (!cartId || quantity < 1) return false;
@@ -343,21 +372,34 @@ export function CartProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       console.log('📦 CartContext: Creating order...');
 
-      const orderPayload = {
+      // Get user authentication token
+      const token = await SecureStore.getItemAsync('access_token');
+      const isAuthenticated = !!token;
+
+      // Build order payload based on authentication status
+      const orderPayload: any = {
         cart_id: cartId,
         payment_method: orderData.payment_method,
         area: orderData.shipping_address.area,
-        // Guest fields
-        name: orderData.shipping_address.name,
-        email: orderData.shipping_address.email,
-        phone: orderData.shipping_address.phone,
-        shipping_address: orderData.shipping_address.address,
-        is_guest: true, // For now, treat all as guest
       };
 
-      console.log('📦 CartContext: Order payload:', orderPayload);
+      // For guest users, add all required fields
+      if (!isAuthenticated) {
+        orderPayload.name = orderData.shipping_address.name;
+        orderPayload.email = orderData.shipping_address.email;
+        orderPayload.phone = orderData.shipping_address.phone;
+        orderPayload.shipping_address = orderData.shipping_address.address;
+      } else {
+        // For authenticated users, only add shipping_address if provided
+        if (orderData.shipping_address.address) {
+          orderPayload.shipping_address = orderData.shipping_address.address;
+        }
+      }
 
-      const result = await apiCreateOrder(orderPayload, null);
+      console.log('📦 CartContext: Order payload:', orderPayload);
+      console.log('📦 CartContext: Is authenticated:', isAuthenticated);
+
+      const result = await apiCreateOrder(orderPayload, token);
 
       if (result.success) {
         console.log('✅ CartContext: Order created successfully');
@@ -394,6 +436,35 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }, [cartId, cart]);
 
+  const handleContinueAsGuest = useCallback(async () => {
+    // Set guest mode
+    await SecureStore.setItemAsync(GUEST_MODE_KEY, 'true');
+    setIsGuestMode(true);
+    setShowGuestModal(false);
+
+    // Process pending item if exists
+    if (pendingAddItem) {
+      const { product, quantity, variant } = pendingAddItem;
+      setPendingAddItem(null);
+      // Recursively call addItem, but now guest mode is enabled
+      await addItem(product, quantity, variant);
+    }
+  }, [pendingAddItem, addItem]);
+
+  const handleCloseModal = useCallback(() => {
+    setShowGuestModal(false);
+    setPendingAddItem(null);
+  }, []);
+
+  const handleLogin = useCallback(() => {
+    // Simply close the modal
+    // User should navigate to Profile tab and tap Login manually
+    // This avoids navigation context issues since modal is outside nav tree
+    console.log('💡 Please go to Profile tab to login');
+    // Clear pending item since user chose to login instead
+    setPendingAddItem(null);
+  }, []);
+
   return (
     <CartContext.Provider
       value={{
@@ -416,6 +487,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
+      <GuestCheckoutModal
+        visible={showGuestModal}
+        onContinueAsGuest={handleContinueAsGuest}
+        onLogin={handleLogin}
+        onClose={handleCloseModal}
+      />
     </CartContext.Provider>
   );
 }

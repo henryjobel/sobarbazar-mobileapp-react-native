@@ -108,15 +108,16 @@ export default function SearchScreen() {
 
     try {
       const currentPage = reset ? 1 : page;
-      const results = await searchProducts(searchQuery, currentPage, 20);
+      const response = await searchProducts(searchQuery, currentPage, 20);
+      const results = response?.results || [];
 
       if (reset) {
-        setProducts(results || []);
+        setProducts(results);
       } else {
-        setProducts(prev => [...prev, ...(results || [])]);
+        setProducts(prev => [...prev, ...results]);
       }
 
-      setHasMore((results || []).length === 20);
+      setHasMore(results.length === 20);
 
       // Add to recent searches
       if (searchQuery && !recentSearches.includes(searchQuery)) {

@@ -36,8 +36,8 @@ export default function FeaturedSection({ brands = [], categories = [] }: Featur
       <View className="flex-row mb-4">
         {/* All Products Card */}
         <TouchableOpacity
-          className="flex-1 bg-green-500 rounded-2xl p-4 mr-2 overflow-hidden"
-          onPress={() => router.push('/screens/shop')}
+          className="flex-1 bg-main-600 rounded-2xl p-4 mr-2 overflow-hidden"
+          onPress={() => router.push('/(tabs)/shop')}
           activeOpacity={0.9}
         >
           <View className="flex-row items-center justify-between">
@@ -107,11 +107,11 @@ export default function FeaturedSection({ brands = [], categories = [] }: Featur
 
         {/* Free Shipping Card */}
         <TouchableOpacity
-          className="w-[48%] bg-green-50 rounded-2xl p-4 mb-3"
+          className="w-[48%] bg-main-50 rounded-2xl p-4 mb-3"
           activeOpacity={0.8}
         >
-          <View className="w-10 h-10 bg-green-100 rounded-xl items-center justify-center mb-3">
-            <Ionicons name="car" size={20} color="#22C55E" />
+          <View className="w-10 h-10 bg-main-100 rounded-xl items-center justify-center mb-3">
+            <Ionicons name="car" size={20} color="#299e60" />
           </View>
           <Text className="text-gray-800 font-bold text-base">Free Shipping</Text>
           <Text className="text-gray-500 text-xs mt-1">On orders ৳500+</Text>

@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import React, { useEffect } from "react";
+import { useRouter, useFocusEffect } from "expo-router";
+import React, { useEffect, useCallback } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -34,6 +34,14 @@ export default function CartPage() {
   useEffect(() => {
     refreshCart();
   }, []);
+
+  // Refresh cart every time the screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      console.log('🛒 Cart Page: Screen focused, refreshing cart...');
+      refreshCart();
+    }, [refreshCart])
+  );
 
   const cartItems = cart?.items || [];
 
@@ -103,7 +111,7 @@ export default function CartPage() {
           <Text className="text-sm text-gray-500 mt-1">{item.variant.attributes}</Text>
         )}
 
-        <Text className="text-lg font-bold text-green-600 mt-2">
+        <Text className="text-lg font-bold text-main-700 mt-2">
           {formatPrice(getItemPrice(item))}
         </Text>
 
@@ -126,7 +134,7 @@ export default function CartPage() {
           </Text>
 
           <TouchableOpacity
-            className="w-8 h-8 bg-green-500 rounded-lg items-center justify-center"
+            className="w-8 h-8 bg-main-600 rounded-lg items-center justify-center"
             onPress={() => handleIncrement(item.id)}
             disabled={isLoading}
           >
@@ -162,7 +170,7 @@ export default function CartPage() {
         Looks like you haven't added any items to your cart yet
       </Text>
       <TouchableOpacity
-        className="bg-green-500 px-8 py-4 rounded-2xl shadow-lg"
+        className="bg-main-600 px-8 py-4 rounded-2xl shadow-lg"
         onPress={handleContinueShopping}
       >
         <Text className="text-white font-semibold text-lg">Start Shopping</Text>
@@ -173,7 +181,7 @@ export default function CartPage() {
   if (isLoading && cartItems.length === 0) {
     return (
       <SafeAreaView className="flex-1 bg-gray-50 items-center justify-center">
-        <ActivityIndicator size="large" color="#22C55E" />
+        <ActivityIndicator size="large" color="#299e60" />
         <Text className="text-gray-600 mt-4">Loading cart...</Text>
       </SafeAreaView>
     );
@@ -212,8 +220,8 @@ export default function CartPage() {
               <RefreshControl
                 refreshing={isLoading}
                 onRefresh={refreshCart}
-                colors={["#22C55E"]}
-                tintColor="#22C55E"
+                colors={["#299e60"]}
+                tintColor="#299e60"
               />
             }
           >
@@ -227,7 +235,7 @@ export default function CartPage() {
               <View className="flex-row">
                 <TouchableOpacity
                   className={`flex-1 py-3 rounded-xl mr-2 items-center ${
-                    shippingArea === "IN" ? "bg-green-500" : "bg-gray-100"
+                    shippingArea === "IN" ? "bg-main-600" : "bg-gray-100"
                   }`}
                   onPress={() => setShippingArea("IN")}
                 >
@@ -248,7 +256,7 @@ export default function CartPage() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   className={`flex-1 py-3 rounded-xl ml-2 items-center ${
-                    shippingArea === "OUT" ? "bg-green-500" : "bg-gray-100"
+                    shippingArea === "OUT" ? "bg-main-600" : "bg-gray-100"
                   }`}
                   onPress={() => setShippingArea("OUT")}
                 >
@@ -285,7 +293,7 @@ export default function CartPage() {
               {(cart?.coupon_discount || 0) > 0 && (
                 <View className="flex-row justify-between">
                   <Text className="text-gray-500">Coupon Discount</Text>
-                  <Text className="text-green-600 font-medium">
+                  <Text className="text-main-700 font-medium">
                     -{formatPrice(cart?.coupon_discount || 0)}
                   </Text>
                 </View>
@@ -302,7 +310,7 @@ export default function CartPage() {
 
               <View className="flex-row justify-between">
                 <Text className="text-lg font-bold text-gray-800">Total</Text>
-                <Text className="text-xl font-bold text-green-600">
+                <Text className="text-xl font-bold text-main-700">
                   {formatPrice(total)}
                 </Text>
               </View>
@@ -311,7 +319,7 @@ export default function CartPage() {
             {/* Checkout Button */}
             <TouchableOpacity
               className={`py-4 rounded-2xl shadow-lg flex-row items-center justify-center ${
-                isLoading ? "bg-green-400" : "bg-green-500"
+                isLoading ? "bg-main-400" : "bg-main-600"
               }`}
               onPress={handleCheckout}
               disabled={isLoading || cartItems.length === 0}
@@ -333,7 +341,7 @@ export default function CartPage() {
               className="mt-3 py-3"
               onPress={handleContinueShopping}
             >
-              <Text className="text-green-600 text-center font-medium">
+              <Text className="text-main-700 text-center font-medium">
                 Continue Shopping
               </Text>
             </TouchableOpacity>

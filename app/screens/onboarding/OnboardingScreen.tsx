@@ -66,8 +66,8 @@ export default function OnboardingScreen() {
   }));
 
   const handleGetStarted = () => {
-    // Navigate to login screen
-    router.push('/(routes)/login');
+    // Navigate to home screen (tabs)
+    router.push('/(tabs)');
   };
 
   return (

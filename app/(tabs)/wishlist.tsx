@@ -110,7 +110,7 @@ export default function WishlistScreen() {
             Browse our products and save your favorites here
           </Text>
           <TouchableOpacity
-            className="bg-green-500 px-8 py-4 rounded-2xl shadow-lg shadow-green-200"
+            className="bg-main-600 px-8 py-4 rounded-2xl shadow-lg shadow-main-200"
             onPress={() => router.push('/(tabs)')}
             activeOpacity={0.8}
           >
@@ -147,7 +147,7 @@ export default function WishlistScreen() {
       {/* Loading state */}
       {isLoading && items.length === 0 ? (
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#22C55E" />
+          <ActivityIndicator size="large" color="#299e60" />
           <Text className="text-gray-500 mt-4">Loading wishlist...</Text>
         </View>
       ) : (
@@ -158,8 +158,8 @@ export default function WishlistScreen() {
             <RefreshControl
               refreshing={isRefreshing}
               onRefresh={handleRefresh}
-              colors={['#22C55E']}
-              tintColor="#22C55E"
+              colors={['#299e60']}
+              tintColor="#299e60"
             />
           }
         >
@@ -228,7 +228,7 @@ export default function WishlistScreen() {
 
                   {/* Price */}
                   <View className="flex-row items-center mb-3">
-                    <Text className="text-green-600 font-bold text-base">
+                    <Text className="text-main-700 font-bold text-base">
                       {formatPrice(item.price)}
                     </Text>
                     {item.original_price && item.original_price > item.price && (
@@ -244,8 +244,8 @@ export default function WishlistScreen() {
                       item.in_stock === false
                         ? 'bg-gray-200'
                         : addingToCart === item.id
-                        ? 'bg-green-400'
-                        : 'bg-green-500'
+                        ? 'bg-main-400'
+                        : 'bg-main-600'
                     }`}
                     onPress={() => handleAddToCart(item)}
                     disabled={item.in_stock === false || addingToCart === item.id}

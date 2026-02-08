@@ -90,7 +90,7 @@ export default function LoginScreen() {
         >
           {/* Header Section */}
           <View className="items-center pt-12 pb-8">
-            <View className="w-20 h-20 bg-green-500 rounded-2xl items-center justify-center mb-4 shadow-lg shadow-green-200">
+            <View className="w-20 h-20 bg-main-600 rounded-2xl items-center justify-center mb-4 shadow-lg shadow-main-200">
               <Text className="text-white text-2xl font-bold">SB</Text>
             </View>
             <Text className="text-3xl font-bold text-gray-800 mb-2">Sobarbazar</Text>
@@ -175,7 +175,7 @@ export default function LoginScreen() {
               >
                 <View
                   className={`w-5 h-5 border-2 rounded mr-2 items-center justify-center ${
-                    rememberMe ? 'bg-green-500 border-green-500' : 'border-gray-300'
+                    rememberMe ? 'bg-main-600 border-main-600' : 'border-gray-300'
                   }`}
                 >
                   {rememberMe && <Ionicons name="checkmark" size={12} color="#fff" />}
@@ -183,14 +183,14 @@ export default function LoginScreen() {
                 <Text className="text-gray-600 text-sm">Remember me</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={handleForgotPassword} disabled={isLoading}>
-                <Text className="text-green-600 font-medium text-sm">Forgot Password?</Text>
+                <Text className="text-main-700 font-medium text-sm">Forgot Password?</Text>
               </TouchableOpacity>
             </View>
 
             {/* Login Button */}
             <TouchableOpacity
-              className={`rounded-2xl py-4 mb-6 shadow-lg shadow-green-200 ${
-                isLoading ? 'bg-green-400' : 'bg-green-500'
+              className={`rounded-2xl py-4 mb-6 shadow-lg shadow-main-200 ${
+                isLoading ? 'bg-main-400' : 'bg-main-600'
               }`}
               onPress={handleLogin}
               disabled={isLoading}
@@ -235,7 +235,7 @@ export default function LoginScreen() {
             <View className="flex-row justify-center mb-8">
               <Text className="text-gray-600">Don't have an account? </Text>
               <TouchableOpacity onPress={handleSignUp} disabled={isLoading}>
-                <Text className="text-green-600 font-semibold">Sign Up</Text>
+                <Text className="text-main-700 font-semibold">Sign Up</Text>
               </TouchableOpacity>
             </View>
           </View>

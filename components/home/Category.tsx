@@ -43,15 +43,12 @@ const Category: React.FC<CategoryProps> = ({ categories }) => {
     : Categories;
 
   const handleCategoryPress = (category: any) => {
-    // Navigate to category products
-    router.push({
-      pathname: '/screens/shop',
-      params: { categoryId: category.id, categoryName: category.title },
-    });
+    // Navigate to category products with query string (now in tabs group)
+    router.push(`/(tabs)/shop?category=${category.id}&name=${encodeURIComponent(category.title)}`);
   };
 
   const handleViewAll = () => {
-    router.push('/screens/shop');
+    router.push('/(tabs)/shop');
   };
 
   if (displayCategories.length === 0) {

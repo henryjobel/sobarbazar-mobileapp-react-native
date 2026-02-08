@@ -129,16 +129,62 @@ const FlashSaleSection: React.FC<FlashSaleSectionProps> = ({
   };
 
   const handleViewAll = () => {
-    router.push('/screens/shop');
+    router.push('/(tabs)/shop');
+  };
+
+  // Base URL for images
+  const BASE_URL = 'https://api.hetdcl.com';
+
+  // Ensure URL is absolute
+  const ensureAbsoluteUrl = (url: string | undefined | null): string | null => {
+    if (!url) return null;
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+    if (url.startsWith('/')) {
+      return `${BASE_URL}${url}`;
+    }
+    return `${BASE_URL}/${url}`;
   };
 
   const getProductImage = (product: Product) => {
+    let imageUrl: string | null = null;
+
+    // Try default_variant image first
     if (product.default_variant?.image) {
-      return product.default_variant.image;
+      imageUrl = ensureAbsoluteUrl(product.default_variant.image);
+      if (imageUrl) return imageUrl;
     }
+
+    // Try images array
     if (product.images && product.images.length > 0) {
-      return product.images[0].image;
+      const img = product.images[0];
+      if (typeof img === 'string') {
+        imageUrl = ensureAbsoluteUrl(img);
+      } else if (img?.image) {
+        imageUrl = ensureAbsoluteUrl(img.image);
+      }
+      if (imageUrl) return imageUrl;
     }
+
+    // Try supplier_product images
+    const supplierProduct = (product as any).supplier_product;
+    if (supplierProduct?.images && supplierProduct.images.length > 0) {
+      const spImage = supplierProduct.images[0];
+      if (typeof spImage === 'string') {
+        imageUrl = ensureAbsoluteUrl(spImage);
+      } else if (spImage?.image) {
+        imageUrl = ensureAbsoluteUrl(spImage.image);
+      }
+      if (imageUrl) return imageUrl;
+    }
+
+    // Try direct image field
+    if ((product as any).image) {
+      imageUrl = ensureAbsoluteUrl((product as any).image);
+      if (imageUrl) return imageUrl;
+    }
+
     return 'https://via.placeholder.com/200';
   };
 

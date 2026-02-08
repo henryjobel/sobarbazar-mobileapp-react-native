@@ -347,7 +347,7 @@ export default function CheckoutScreen() {
               <MaterialIcons
                 name="payments"
                 size={28}
-                color={paymentMethod === 'COD' ? '#22C55E' : '#6B7280'}
+                color={paymentMethod === 'COD' ? '#299e60' : '#6B7280'}
               />
               <View style={styles.paymentInfo}>
                 <Text style={[styles.paymentTitle, paymentMethod === 'COD' && styles.paymentTitleActive]}>
@@ -368,7 +368,7 @@ export default function CheckoutScreen() {
               <MaterialIcons
                 name="credit-card"
                 size={28}
-                color={paymentMethod === 'OP' ? '#22C55E' : '#6B7280'}
+                color={paymentMethod === 'OP' ? '#299e60' : '#6B7280'}
               />
               <View style={styles.paymentInfo}>
                 <Text style={[styles.paymentTitle, paymentMethod === 'OP' && styles.paymentTitleActive]}>
@@ -473,7 +473,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   shopButton: {
-    backgroundColor: '#22C55E',
+    backgroundColor: '#299e60',
     paddingHorizontal: 32,
     paddingVertical: 14,
     borderRadius: 14,
@@ -533,7 +533,7 @@ const styles = StyleSheet.create({
   itemPrice: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#22C55E',
+    color: '#299e60',
   },
   itemQty: {
     fontSize: 14,
@@ -606,7 +606,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   areaOptionActive: {
-    borderColor: '#22C55E',
+    borderColor: '#299e60',
     backgroundColor: '#F0FDF4',
   },
   radioOuter: {
@@ -619,13 +619,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   radioOuterActive: {
-    borderColor: '#22C55E',
+    borderColor: '#299e60',
   },
   radioInner: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#22C55E',
+    backgroundColor: '#299e60',
   },
   areaInfo: {
     flex: 1,
@@ -637,7 +637,7 @@ const styles = StyleSheet.create({
     color: '#374151',
   },
   areaTitleActive: {
-    color: '#22C55E',
+    color: '#299e60',
   },
   areaSubtitle: {
     fontSize: 13,
@@ -650,7 +650,7 @@ const styles = StyleSheet.create({
     color: '#374151',
   },
   areaPriceActive: {
-    color: '#22C55E',
+    color: '#299e60',
   },
   paymentOptions: {
     gap: 12,
@@ -665,7 +665,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   paymentOptionActive: {
-    borderColor: '#22C55E',
+    borderColor: '#299e60',
     backgroundColor: '#F0FDF4',
   },
   paymentInfo: {
@@ -678,7 +678,7 @@ const styles = StyleSheet.create({
     color: '#374151',
   },
   paymentTitleActive: {
-    color: '#22C55E',
+    color: '#299e60',
   },
   paymentSubtitle: {
     fontSize: 13,
@@ -700,7 +700,7 @@ const styles = StyleSheet.create({
     color: '#1F2937',
   },
   discountValue: {
-    color: '#22C55E',
+    color: '#299e60',
   },
   totalRow: {
     borderTopWidth: 1,
@@ -716,7 +716,7 @@ const styles = StyleSheet.create({
   totalValue: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#22C55E',
+    color: '#299e60',
   },
   bottomBar: {
     position: 'absolute',
@@ -743,7 +743,7 @@ const styles = StyleSheet.create({
     color: '#1F2937',
   },
   placeOrderButton: {
-    backgroundColor: '#22C55E',
+    backgroundColor: '#299e60',
     paddingHorizontal: 32,
     paddingVertical: 16,
     borderRadius: 14,

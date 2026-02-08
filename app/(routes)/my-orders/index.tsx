@@ -29,24 +29,23 @@ interface OrderItem {
 interface Order {
   id: number;
   order_number: string;
-  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+  status: 'Placed' | 'Paid' | 'Confirmed' | 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled';
   total_amount: number;
-  created_at: string;
+  order_date: string;
+  created_at?: string;
   items: OrderItem[];
-  shipping_address?: {
-    full_name: string;
-    phone: string;
-    address: string;
-    city: string;
-  };
+  shipping_address?: string;
+  payment_method?: string;
 }
 
-const STATUS_CONFIG = {
-  pending: { color: '#F59E0B', bg: '#FEF3C7', label: 'Pending', icon: 'time-outline' },
-  processing: { color: '#3B82F6', bg: '#DBEAFE', label: 'Processing', icon: 'reload-outline' },
-  shipped: { color: '#8B5CF6', bg: '#EDE9FE', label: 'Shipped', icon: 'car-outline' },
-  delivered: { color: '#10B981', bg: '#D1FAE5', label: 'Delivered', icon: 'checkmark-circle-outline' },
-  cancelled: { color: '#EF4444', bg: '#FEE2E2', label: 'Cancelled', icon: 'close-circle-outline' },
+const STATUS_CONFIG: { [key: string]: any } = {
+  Placed: { color: '#F59E0B', bg: '#FEF3C7', label: 'Placed', icon: 'time-outline' },
+  Paid: { color: '#10B981', bg: '#D1FAE5', label: 'Paid', icon: 'checkmark-circle-outline' },
+  Confirmed: { color: '#3B82F6', bg: '#DBEAFE', label: 'Confirmed', icon: 'checkmark-done-outline' },
+  Processing: { color: '#3B82F6', bg: '#DBEAFE', label: 'Processing', icon: 'reload-outline' },
+  Shipped: { color: '#8B5CF6', bg: '#EDE9FE', label: 'Shipped', icon: 'car-outline' },
+  Delivered: { color: '#10B981', bg: '#D1FAE5', label: 'Delivered', icon: 'checkmark-circle-outline' },
+  Cancelled: { color: '#EF4444', bg: '#FEE2E2', label: 'Cancelled', icon: 'close-circle-outline' },
 };
 
 export default function MyOrdersScreen() {
@@ -123,7 +122,7 @@ export default function MyOrdersScreen() {
   );
 
   const renderOrderItem = ({ item }: { item: Order }) => {
-    const statusConfig = STATUS_CONFIG[item.status] || STATUS_CONFIG.pending;
+    const statusConfig = STATUS_CONFIG[item.status] || STATUS_CONFIG.Placed;
     const firstItem = item.items?.[0];
     const itemCount = item.items?.length || 0;
 
@@ -137,7 +136,7 @@ export default function MyOrdersScreen() {
         <View style={styles.orderHeader}>
           <View>
             <Text style={styles.orderNumber}>Order #{item.order_number || item.id}</Text>
-            <Text style={styles.orderDate}>{formatDate(item.created_at)}</Text>
+            <Text style={styles.orderDate}>{formatDate(item.order_date || item.created_at || '')}</Text>
           </View>
           <View style={[styles.statusBadge, { backgroundColor: statusConfig.bg }]}>
             <Ionicons name={statusConfig.icon as any} size={14} color={statusConfig.color} />
@@ -263,11 +262,12 @@ export default function MyOrdersScreen() {
           showsHorizontalScrollIndicator={false}
           data={[
             { key: 'all', label: 'All' },
-            { key: 'pending', label: 'Pending' },
-            { key: 'processing', label: 'Processing' },
-            { key: 'shipped', label: 'Shipped' },
-            { key: 'delivered', label: 'Delivered' },
-            { key: 'cancelled', label: 'Cancelled' },
+            { key: 'Placed', label: 'Placed' },
+            { key: 'Paid', label: 'Paid' },
+            { key: 'Processing', label: 'Processing' },
+            { key: 'Shipped', label: 'Shipped' },
+            { key: 'Delivered', label: 'Delivered' },
+            { key: 'Cancelled', label: 'Cancelled' },
           ]}
           renderItem={({ item }: { item: { key: string; label: string } }) => renderFilterChip(item.key, item.label)}
           contentContainerStyle={styles.filterList}

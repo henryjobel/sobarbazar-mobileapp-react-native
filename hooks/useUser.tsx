@@ -167,7 +167,7 @@ export const LoginComponent: React.FC = () => {
   return (
     <View className="p-4">
       <TouchableOpacity 
-        className="bg-green-500 rounded-lg py-3 px-6"
+        className="bg-main-600 rounded-lg py-3 px-6"
         onPress={handleLogin}
       >
         <Text className="text-white text-center font-semibold">Login</Text>

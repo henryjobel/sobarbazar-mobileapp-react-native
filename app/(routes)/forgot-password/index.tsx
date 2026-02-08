@@ -83,7 +83,7 @@ export default function ForgotPasswordScreen() {
           </Text>
 
           <TouchableOpacity
-            className="w-full bg-green-500 rounded-2xl py-4 mb-4"
+            className="w-full bg-main-600 rounded-2xl py-4 mb-4"
             onPress={() => {
               setIsSubmitted(false);
               setEmail('');
@@ -93,7 +93,7 @@ export default function ForgotPasswordScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity onPress={handleBackToLogin}>
-            <Text className="text-green-600 font-semibold text-base">Back to Sign In</Text>
+            <Text className="text-main-700 font-semibold text-base">Back to Sign In</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -162,8 +162,8 @@ export default function ForgotPasswordScreen() {
 
             {/* Reset Button */}
             <TouchableOpacity
-              className={`rounded-2xl py-4 mb-6 shadow-lg shadow-green-200 ${
-                isLoading ? 'bg-green-400' : 'bg-green-500'
+              className={`rounded-2xl py-4 mb-6 shadow-lg shadow-main-200 ${
+                isLoading ? 'bg-main-400' : 'bg-main-600'
               }`}
               onPress={handleResetPassword}
               disabled={isLoading}
@@ -183,7 +183,7 @@ export default function ForgotPasswordScreen() {
             <View className="flex-row justify-center">
               <Text className="text-gray-600">Remember your password? </Text>
               <TouchableOpacity onPress={handleBackToLogin} disabled={isLoading}>
-                <Text className="text-green-600 font-semibold">Sign In</Text>
+                <Text className="text-main-700 font-semibold">Sign In</Text>
               </TouchableOpacity>
             </View>
           </View>

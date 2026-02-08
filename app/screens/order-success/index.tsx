@@ -57,7 +57,7 @@ export default function OrderSuccessScreen() {
                 style={[
                   styles.confetti,
                   {
-                    backgroundColor: ['#22C55E', '#3B82F6', '#F59E0B', '#EF4444'][i % 4],
+                    backgroundColor: ['#299e60', '#3B82F6', '#F59E0B', '#EF4444'][i % 4],
                     transform: [
                       { rotate: `${i * 45}deg` },
                       { translateX: 70 },
@@ -92,7 +92,7 @@ export default function OrderSuccessScreen() {
           )}
 
           <View style={styles.infoBox}>
-            <Ionicons name="mail-outline" size={24} color="#22C55E" />
+            <Ionicons name="mail-outline" size={24} color="#299e60" />
             <Text style={styles.infoText}>
               We've sent a confirmation email with your order details.
             </Text>
@@ -148,7 +148,7 @@ export default function OrderSuccessScreen() {
               style={styles.trackButton}
               onPress={() => router.push(`/screens/order-detail/${orderId}`)}
             >
-              <Ionicons name="location-outline" size={20} color="#22C55E" />
+              <Ionicons name="location-outline" size={20} color="#299e60" />
               <Text style={styles.trackButtonText}>Track Order</Text>
             </TouchableOpacity>
           )}
@@ -184,10 +184,10 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: '#22C55E',
+    backgroundColor: '#299e60',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#22C55E',
+    shadowColor: '#299e60',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
     shadowRadius: 16,
@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
   orderIdValue: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#22C55E',
+    color: '#299e60',
   },
   infoBox: {
     flexDirection: 'row',
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   timelineDotActive: {
-    backgroundColor: '#22C55E',
+    backgroundColor: '#299e60',
   },
   timelineLine: {
     width: 2,
@@ -306,18 +306,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#fff',
     borderWidth: 2,
-    borderColor: '#22C55E',
+    borderColor: '#299e60',
     paddingVertical: 16,
     borderRadius: 14,
   },
   trackButtonText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#22C55E',
+    color: '#299e60',
     marginLeft: 8,
   },
   continueButton: {
-    backgroundColor: '#22C55E',
+    backgroundColor: '#299e60',
     paddingVertical: 16,
     borderRadius: 14,
     alignItems: 'center',

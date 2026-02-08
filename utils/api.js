@@ -1,20 +1,24 @@
 // utils/api.js
 import Constants from "expo-constants";
 
+// IMPORTANT: Change this to your local backend URL when testing locally
+// For local development: "http://10.0.2.2:8000" (Android emulator) or "http://localhost:8000" (iOS simulator)
+// For production: "https://api.hetdcl.com"
 const BASE_URL = Constants.expoConfig?.extra?.apiUrl || "https://api.hetdcl.com";
 const AUTH_URL = Constants.expoConfig?.extra?.authApiUrl || "https://api.hetdcl.com";
 
 // Helper function for headers
-const getHeaders = (token = null) => {
+const getHeaders = (token = null, useJWT = false) => {
   const headers = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   };
-  
+
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    // Use JWT for auth endpoints, Bearer for all others
+    headers['Authorization'] = useJWT ? `JWT ${token}` : `Bearer ${token}`;
   }
-  
+
   return headers;
 };
 
@@ -41,11 +45,11 @@ const parseResponse = async (response) => {
 export async function testApiConnection() {
   console.log("🔍 Testing API Connection...");
   console.log("🔗 BASE_URL:", BASE_URL);
-  
+
   const testUrls = [
-    `${BASE_URL}/api/v1.0/customers/products/?limit=5`,
-    `${BASE_URL}/api/v1.0/stores/categories/`,
-    `${BASE_URL}/api/v1.0/base/home-page-data/`
+    `${BASE_URL}/api/customer/products/?page_size=5`,
+    `${BASE_URL}/api/store/categories/`,
+    `${BASE_URL}/api/store/public/`
   ];
   
   for (const url of testUrls) {
@@ -247,21 +251,28 @@ export async function registerUser(userData) {
 }
 
 // ==================== PRODUCT APIs ====================
-export async function getProducts(page = 1, limit = 20, category = null, search = null) {
+export async function getProducts(page = 1, limit = 20, category = null, search = null, brand = null, store = null) {
   let url = `${BASE_URL}/api/v1.0/customers/products/`;
 
   // Build query parameters
   const params = new URLSearchParams();
-  params.append('pagination', '1');
   params.append('page', page.toString());
   params.append('page_size', limit.toString());
 
   if (category) {
-    params.append('category', category);
+    params.append('supplier_product__subcategories__category', category);
   }
 
   if (search) {
     params.append('search', search);
+  }
+
+  if (brand) {
+    params.append('supplier_product__brand_or_company', brand);
+  }
+
+  if (store) {
+    params.append('supplier_product__store', store);
   }
 
   url += `?${params.toString()}`;
@@ -275,43 +286,50 @@ export async function getProducts(page = 1, limit = 20, category = null, search 
 
     if (!res.ok) {
       console.log("❌ Products API Failed with status:", res.status);
-      return [];
+      return { results: [], count: 0, pages: 0 };
     }
 
     const json = await parseResponse(res);
     console.log("🛍️ Products Raw:", JSON.stringify(json).substring(0, 400));
 
     let products = [];
+    let totalCount = 0;
 
-    // Check various response structures
-    // Structure 1: {success: true, data: {results: [...]}}
+    // Check various response structures and extract count
+    // Structure 1: {success: true, data: {results: [...], count: N}}
     if (json && json.success && json.data && json.data.results && Array.isArray(json.data.results)) {
       products = json.data.results;
+      totalCount = json.data.count || json.count || products.length;
       console.log(`✅ Found ${products.length} products in 'data.results'`);
     }
     // Structure 2: {success: true, data: [...]}
     else if (json && json.success && json.data && Array.isArray(json.data)) {
       products = json.data;
+      totalCount = json.count || products.length;
       console.log(`✅ Found ${products.length} products in 'data' (array)`);
     }
-    // Structure 3: {data: {results: [...]}}
+    // Structure 3: {data: {results: [...], count: N}}
     else if (json && json.data && json.data.results && Array.isArray(json.data.results)) {
       products = json.data.results;
+      totalCount = json.data.count || json.count || products.length;
       console.log(`✅ Found ${products.length} products in 'data.results' (no success)`);
     }
     // Structure 4: {data: [...]}
     else if (json && json.data && Array.isArray(json.data)) {
       products = json.data;
+      totalCount = json.count || products.length;
       console.log(`✅ Found ${products.length} products in 'data'`);
     }
-    // Structure 5: {results: [...]}
+    // Structure 5: {results: [...], count: N} - Django REST Framework pagination
     else if (json && json.results && Array.isArray(json.results)) {
       products = json.results;
+      totalCount = json.count || products.length;
       console.log(`✅ Found ${products.length} products in 'results'`);
     }
     // Structure 6: Direct array
     else if (Array.isArray(json)) {
       products = json;
+      totalCount = products.length;
       console.log(`✅ Found ${products.length} products in direct array`);
     }
 
@@ -319,10 +337,18 @@ export async function getProducts(page = 1, limit = 20, category = null, search 
       console.log("⚠️ No products found in response");
     }
 
-    return products;
+    // ALWAYS return normalized structure
+    const totalPages = Math.ceil(totalCount / limit);
+    console.log(`📦 Returning ${products.length} products, total: ${totalCount}, pages: ${totalPages}`);
+
+    return {
+      results: products,
+      count: totalCount,
+      pages: totalPages
+    };
   } catch (err) {
     console.log("❌ Products Error:", err.message);
-    return [];
+    return { results: [], count: 0, pages: 0 };
   }
 }
 
@@ -390,7 +416,6 @@ export async function getCategories() {
   // Try multiple URL patterns
   const urls = [
     `${BASE_URL}/api/v1.0/stores/categories/?pagination=0`,
-    `${BASE_URL}/api/v1.0/customers/categories/`,
     `${BASE_URL}/api/v1.0/base/categories/`,
   ];
 
@@ -451,8 +476,6 @@ export async function getSubCategories(categoryId) {
   // Try multiple URL patterns
   const urls = [
     `${BASE_URL}/api/v1.0/stores/subcategories/?category=${categoryId}`,
-    `${BASE_URL}/api/v1.0/stores/subcategories/${categoryId}/`,
-    `${BASE_URL}/api/v1.0/customers/subcategories/?category=${categoryId}`,
   ];
 
   for (const url of urls) {
@@ -497,6 +520,57 @@ export async function getSubCategories(categoryId) {
   return [];
 }
 
+export async function getBrands() {
+  // Try multiple URL patterns
+  const urls = [
+    `${BASE_URL}/api/v1.0/stores/brands/`,
+    `${BASE_URL}/api/v1.0/stores/brands/?pagination=0`,
+  ];
+
+  for (const url of urls) {
+    console.log("🏷️ Trying Brands URL:", url);
+
+    try {
+      const res = await fetch(url);
+
+      console.log("📊 Brands Status:", res.status);
+
+      if (!res.ok) {
+        console.log("❌ URL failed, trying next...");
+        continue;
+      }
+
+      const json = await parseResponse(res);
+      console.log("🏷️ Brands Raw:", JSON.stringify(json).substring(0, 300));
+
+      let brands = [];
+
+      // Check various response structures
+      if (json && json.success && json.data && Array.isArray(json.data)) {
+        brands = json.data;
+      } else if (json && json.data && Array.isArray(json.data)) {
+        brands = json.data;
+      } else if (json && json.data && json.data.results && Array.isArray(json.data.results)) {
+        brands = json.data.results;
+      } else if (json && json.results && Array.isArray(json.results)) {
+        brands = json.results;
+      } else if (Array.isArray(json)) {
+        brands = json;
+      }
+
+      if (brands.length > 0) {
+        console.log(`✅ Found ${brands.length} brands`);
+        return brands;
+      }
+    } catch (err) {
+      console.log("❌ Brands Error:", err.message);
+    }
+  }
+
+  console.log("⚠️ No brands found from any URL");
+  return [];
+}
+
 // ==================== CART APIs ====================
 // Backend cart system uses UUID-based cart_id
 // Cart items require variant_id (not product_id)
@@ -521,11 +595,25 @@ export async function createCart() {
       throw new Error('Failed to create cart');
     }
 
-    const data = await parseResponse(res);
-    console.log("✅ Create Cart Response:", JSON.stringify(data).substring(0, 300));
+    const json = await parseResponse(res);
+    console.log("✅ Create Cart Raw Response:", JSON.stringify(json).substring(0, 300));
 
-    // Response: { id: "uuid", items: [], total_amount: 0, ... }
-    return data;
+    // Normalize response
+    let cart = null;
+    if (json && json.success && json.data && json.data.id) {
+      cart = json.data;
+    } else if (json && json.data && json.data.id) {
+      cart = json.data;
+    } else if (json && json.id) {
+      cart = json;
+    }
+
+    if (cart) {
+      cart.items = cart.items || [];
+      console.log(`✅ Created Cart: id=${cart.id}`);
+    }
+
+    return cart;
   } catch (err) {
     console.log("❌ Create Cart Error:", err.message);
     return null;
@@ -546,20 +634,40 @@ export async function getCarts() {
     console.log("📊 Get Carts Status:", res.status);
 
     if (!res.ok) {
-      throw new Error('Failed to fetch carts');
+      console.log("❌ Get Carts Failed with status:", res.status);
+      return [];
     }
 
     const json = await parseResponse(res);
-    console.log("✅ Get Carts Response:", JSON.stringify(json).substring(0, 300));
+    console.log("✅ Get Carts Raw Response:", JSON.stringify(json).substring(0, 300));
 
-    // Response: { data: [...] } or [...]
+    // Normalize response - extract carts array from various structures
     let carts = [];
-    if (json && json.data && Array.isArray(json.data)) {
+
+    // Structure 1: {success: true, data: [...]}
+    if (json && json.success && json.data && Array.isArray(json.data)) {
       carts = json.data;
-    } else if (Array.isArray(json)) {
+    }
+    // Structure 2: {data: [...]}
+    else if (json && json.data && Array.isArray(json.data)) {
+      carts = json.data;
+    }
+    // Structure 3: {results: [...]} (paginated)
+    else if (json && json.results && Array.isArray(json.results)) {
+      carts = json.results;
+    }
+    // Structure 4: Direct array [...]
+    else if (Array.isArray(json)) {
       carts = json;
     }
 
+    // Normalize each cart
+    carts = carts.map(cart => ({
+      ...cart,
+      items: cart.items || []
+    }));
+
+    console.log(`✅ Found ${carts.length} carts`);
     return carts;
   } catch (err) {
     console.log("❌ Get Carts Error:", err.message);
@@ -581,12 +689,38 @@ export async function getCart(cartId) {
     console.log("📊 Get Cart Status:", res.status);
 
     if (!res.ok) {
-      throw new Error('Failed to fetch cart');
+      console.log("❌ Get Cart Failed with status:", res.status);
+      return null;
     }
 
-    const data = await parseResponse(res);
-    console.log("✅ Get Cart Response:", JSON.stringify(data).substring(0, 300));
-    return data;
+    const json = await parseResponse(res);
+    console.log("✅ Get Cart Raw Response:", JSON.stringify(json).substring(0, 500));
+
+    // Normalize response - extract cart data from various response structures
+    let cart = null;
+
+    // Structure 1: {success: true, data: {id: ..., items: [...]}}
+    if (json && json.success && json.data && json.data.id) {
+      cart = json.data;
+    }
+    // Structure 2: {data: {id: ..., items: [...]}}
+    else if (json && json.data && json.data.id) {
+      cart = json.data;
+    }
+    // Structure 3: Direct object {id: ..., items: [...]}
+    else if (json && json.id) {
+      cart = json;
+    }
+
+    if (cart) {
+      // Ensure items array exists
+      cart.items = cart.items || [];
+      console.log(`✅ Normalized Cart: id=${cart.id}, items=${cart.items.length}`);
+    } else {
+      console.log("⚠️ Could not extract cart from response");
+    }
+
+    return cart;
   } catch (err) {
     console.log("❌ Get Cart Error:", err.message);
     return null;
@@ -1130,13 +1264,55 @@ export async function getFlashDeals() {
 
 // ==================== DELIVERY CHARGES ====================
 export async function getDeliveryCharges() {
-  // This would typically come from an API endpoint
-  // Based on backend, delivery charges are stored in DeliveryCharge model
-  // For now, return static values that match the backend
-  return {
-    inside_dhaka: 60,
-    outside_dhaka: 120,
-  };
+  const url = `${BASE_URL}/api/v1.0/customers/delivery-charges/`;
+
+  console.log("🚚 Delivery Charges URL:", url);
+
+  try {
+    const res = await fetch(url, {
+      headers: getHeaders(),
+    });
+
+    console.log("📊 Delivery Charges Status:", res.status);
+
+    if (!res.ok) {
+      console.log("⚠️ Delivery charges API failed, using defaults");
+      // Fallback to default values if API fails
+      return {
+        inside_dhaka: 60,
+        outside_dhaka: 120,
+      };
+    }
+
+    const json = await parseResponse(res);
+    console.log("🚚 Delivery Charges Raw:", JSON.stringify(json).substring(0, 200));
+
+    // Handle various response structures
+    if (json && json.data) {
+      return {
+        inside_dhaka: json.data.inside_dhaka || 60,
+        outside_dhaka: json.data.outside_dhaka || 120,
+      };
+    } else if (json && json.inside_dhaka) {
+      return {
+        inside_dhaka: json.inside_dhaka,
+        outside_dhaka: json.outside_dhaka || 120,
+      };
+    }
+
+    // Fallback if structure doesn't match
+    return {
+      inside_dhaka: 60,
+      outside_dhaka: 120,
+    };
+  } catch (err) {
+    console.log("❌ Delivery Charges Error:", err.message);
+    // Return defaults on error
+    return {
+      inside_dhaka: 60,
+      outside_dhaka: 120,
+    };
+  }
 }
 
 export async function getDashboardData() {
@@ -1164,7 +1340,7 @@ export async function getDashboardData() {
 
 // ==================== STORE APIs ====================
 export async function getStores() {
-  const url = `${BASE_URL}/api/v1.0/customers/products/stores_list/`;
+  const url = `${BASE_URL}/api/v1.0/stores/public/`;
 
   console.log("🏪 Stores URL:", url);
 
@@ -1196,7 +1372,7 @@ export async function getStores() {
 }
 
 export async function getStoreById(storeId) {
-  const url = `${BASE_URL}/api/v1.0/customers/products/stores_list/${storeId}/`;
+  const url = `${BASE_URL}/api/v1.0/stores/${storeId}/detail/`;
 
   console.log("🏪 Store Detail URL:", url);
 
@@ -1234,12 +1410,12 @@ export async function getStoreById(storeId) {
 }
 
 export async function getStoreProducts(storeId, page = 1, limit = 20) {
-  // Try multiple URL patterns - some backends use 'store', others use 'vendor'
-  const urls = [
-    `${BASE_URL}/api/v1.0/customers/products/?store=${storeId}&pagination=1&page=${page}&page_size=${limit}`,
-    `${BASE_URL}/api/v1.0/customers/products/?vendor=${storeId}&pagination=1&page=${page}&page_size=${limit}`,
-    `${BASE_URL}/api/v1.0/customers/products/stores_list/${storeId}/products/`,
-  ];
+  // Backend uses supplier_product__store parameter
+  const url = `${BASE_URL}/api/v1.0/customers/products/?supplier_product__store=${storeId}&page=${page}&page_size=${limit}`;
+
+  console.log("🛍️ Store Products URL:", url);
+
+  const urls = [url];
 
   for (const url of urls) {
     console.log("🛍️ Trying Store Products URL:", url);
@@ -1287,38 +1463,6 @@ export async function getStoreProducts(storeId, page = 1, limit = 20) {
   return [];
 }
 
-export async function getBrands() {
-  const url = `${BASE_URL}/api/v1.0/stores/brands/?pagination=0`;
-  
-  console.log("🏷️ Brands URL:", url);
-  
-  try {
-    const res = await fetch(url);
-    
-    console.log("📊 Brands Status:", res.status);
-    
-    if (!res.ok) {
-      throw new Error('Failed to fetch brands');
-    }
-    
-    const json = await parseResponse(res);
-    
-    if (json && json.data) {
-      console.log(`✅ Found ${json.data.length} brands in 'data'`);
-      return json.data;
-    } else if (Array.isArray(json)) {
-      console.log(`✅ Found ${json.length} brands in array`);
-      return json;
-    } else {
-      console.log("⚠️ No brands found");
-      return [];
-    }
-  } catch (err) {
-    console.log("❌ Brands Error:", err.message);
-    return [];
-  }
-}
-
 // ==================== PAYMENT APIs ====================
 export async function getPaymentMethods() {
   const url = `${BASE_URL}/api/v1.0/customers/payment-methods/`;
@@ -1357,16 +1501,18 @@ export async function getUserProfile(token) {
   // Try multiple endpoints
   const urls = [
     `${AUTH_URL}/auth/users/me/`,
-    `${BASE_URL}/api/v1.0/customers/profile/`,
-    `${BASE_URL}/api/v1.0/customers/me/`,
+    `${BASE_URL}/api/customer/profile/`,
+    `${BASE_URL}/api/customer/me/`,
   ];
 
   for (const url of urls) {
     console.log("👤 Trying User Profile URL:", url);
 
     try {
+      // Use JWT auth for /auth/users/me/, Bearer for others
+      const useJWT = url.includes('/auth/users/me/');
       const res = await fetch(url, {
-        headers: getHeaders(token),
+        headers: getHeaders(token, useJWT),
       });
 
       console.log("📊 User Profile Status:", res.status);
@@ -1412,13 +1558,13 @@ export async function getUserProfile(token) {
 
 export async function updateUserProfile(userData, token) {
   const url = `${AUTH_URL}/auth/users/me/`;
-  
+
   console.log("✏️ Update Profile URL:", url);
-  
+
   try {
     const res = await fetch(url, {
       method: 'PATCH',
-      headers: getHeaders(token),
+      headers: getHeaders(token, true), // Use JWT for auth endpoints
       body: JSON.stringify(userData),
     });
     

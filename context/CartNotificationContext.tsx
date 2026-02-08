@@ -128,7 +128,7 @@ export function CartNotificationProvider({ children }: { children: ReactNode }) 
             {/* Success Header */}
             <View
               style={{
-                backgroundColor: '#22C55E',
+                backgroundColor: '#299e60',
                 paddingHorizontal: 16,
                 paddingVertical: 12,
                 flexDirection: 'row',
@@ -190,7 +190,7 @@ export function CartNotificationProvider({ children }: { children: ReactNode }) 
                 >
                   {product.name}
                 </Text>
-                <Text style={{ color: '#22C55E', fontWeight: 'bold', fontSize: 16, marginTop: 4 }}>
+                <Text style={{ color: '#299e60', fontWeight: 'bold', fontSize: 16, marginTop: 4 }}>
                   ৳{product.price.toLocaleString()}
                 </Text>
               </View>
@@ -223,7 +223,7 @@ export function CartNotificationProvider({ children }: { children: ReactNode }) 
                   flex: 1,
                   paddingVertical: 12,
                   borderRadius: 12,
-                  backgroundColor: '#22C55E',
+                  backgroundColor: '#299e60',
                   alignItems: 'center',
                   flexDirection: 'row',
                   justifyContent: 'center',

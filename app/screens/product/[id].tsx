@@ -6,6 +6,7 @@ import {
   Alert,
   Dimensions,
   FlatList,
+  Platform,
   ScrollView,
   Share,
   StyleSheet,
@@ -18,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCart } from '@/context/CartContext';
 import { useWishlist } from '@/context/WishlistContext';
 import { getProductById } from '@/utils/api';
+import PersistentTabBar from '@/components/ui/PersistentTabBar';
 
 const { width } = Dimensions.get('window');
 
@@ -111,23 +113,18 @@ export default function ProductDetailScreen() {
     setAddingToCart(true);
     try {
       const variant = selectedVariant || product.default_variant;
-      const price = variant?.final_price || variant?.price || 0;
-      const imageUrl = getProductImage();
 
-      addItem({
-        id: product.id,
-        name: product.name,
-        price: price,
-        image: imageUrl,
-        quantity: quantity,
-        variantId: variant?.id,
-      });
+      // Call addItem with correct parameters: (product, quantity, variant)
+      const success = await addItem(product, quantity, variant);
 
-      Alert.alert('Success', 'Product added to cart!', [
-        { text: 'Continue Shopping', style: 'cancel' },
-        { text: 'View Cart', onPress: () => router.push('/(tabs)/cart') },
-      ]);
+      if (success) {
+        Alert.alert('Success', 'Product added to cart!', [
+          { text: 'Continue Shopping', style: 'cancel' },
+          { text: 'View Cart', onPress: () => router.push('/(tabs)/cart') },
+        ]);
+      }
     } catch (error) {
+      console.error('Add to cart error:', error);
       Alert.alert('Error', 'Failed to add product to cart');
     } finally {
       setAddingToCart(false);
@@ -140,20 +137,15 @@ export default function ProductDetailScreen() {
     setAddingToCart(true);
     try {
       const variant = selectedVariant || product.default_variant;
-      const price = variant?.final_price || variant?.price || 0;
-      const imageUrl = getProductImage();
 
-      addItem({
-        id: product.id,
-        name: product.name,
-        price: price,
-        image: imageUrl,
-        quantity: quantity,
-        variantId: variant?.id,
-      });
+      // Call addItem with correct parameters: (product, quantity, variant)
+      const success = await addItem(product, quantity, variant);
 
-      router.push('/screens/checkout');
+      if (success) {
+        router.push('/screens/checkout');
+      }
     } catch (error) {
+      console.error('Buy now error:', error);
       Alert.alert('Error', 'Failed to add product to cart');
     } finally {
       setAddingToCart(false);
@@ -235,7 +227,7 @@ export default function ProductDetailScreen() {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#22C55E" />
+        <ActivityIndicator size="large" color="#299e60" />
         <Text style={styles.loadingText}>Loading product...</Text>
       </SafeAreaView>
     );
@@ -270,7 +262,7 @@ export default function ProductDetailScreen() {
         </View>
       </SafeAreaView>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 180 }}>
         {/* Image Gallery */}
         <View style={styles.imageContainer}>
           <FlatList
@@ -359,7 +351,7 @@ export default function ProductDetailScreen() {
               <Ionicons
                 name={inStock ? 'checkmark-circle' : 'close-circle'}
                 size={16}
-                color={inStock ? '#22C55E' : '#EF4444'}
+                color={inStock ? '#299e60' : '#EF4444'}
               />
               <Text style={[styles.stockText, inStock ? styles.inStockText : styles.outOfStockText]}>
                 {inStock ? `In Stock (${variant?.available_stock || variant?.stock || 0})` : 'Out of Stock'}
@@ -458,21 +450,21 @@ export default function ProductDetailScreen() {
           {/* Features */}
           <View style={styles.featuresSection}>
             <View style={styles.featureItem}>
-              <MaterialIcons name="local-shipping" size={24} color="#22C55E" />
+              <MaterialIcons name="local-shipping" size={24} color="#299e60" />
               <View style={styles.featureTextContainer}>
                 <Text style={styles.featureTitle}>Free Delivery</Text>
                 <Text style={styles.featureSubtitle}>Orders over ৳1000</Text>
               </View>
             </View>
             <View style={styles.featureItem}>
-              <MaterialIcons name="verified" size={24} color="#22C55E" />
+              <MaterialIcons name="verified" size={24} color="#299e60" />
               <View style={styles.featureTextContainer}>
                 <Text style={styles.featureTitle}>Genuine Products</Text>
                 <Text style={styles.featureSubtitle}>100% Authentic</Text>
               </View>
             </View>
             <View style={[styles.featureItem, { borderBottomWidth: 0 }]}>
-              <MaterialIcons name="autorenew" size={24} color="#22C55E" />
+              <MaterialIcons name="autorenew" size={24} color="#299e60" />
               <View style={styles.featureTextContainer}>
                 <Text style={styles.featureTitle}>Easy Returns</Text>
                 <Text style={styles.featureSubtitle}>7 Days Return Policy</Text>
@@ -490,10 +482,10 @@ export default function ProductDetailScreen() {
           disabled={!inStock || addingToCart}
         >
           {addingToCart ? (
-            <ActivityIndicator color="#22C55E" size="small" />
+            <ActivityIndicator color="#299e60" size="small" />
           ) : (
             <>
-              <Ionicons name="cart-outline" size={22} color="#22C55E" />
+              <Ionicons name="cart-outline" size={22} color="#299e60" />
               <Text style={styles.addToCartText}>Add to Cart</Text>
             </>
           )}
@@ -507,6 +499,9 @@ export default function ProductDetailScreen() {
           <Text style={styles.buyNowText}>Buy Now</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Persistent Tab Bar */}
+      <PersistentTabBar />
     </View>
   );
 }
@@ -570,7 +565,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   backButton: {
-    backgroundColor: '#22C55E',
+    backgroundColor: '#299e60',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 12,
@@ -605,7 +600,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   indicatorActive: {
-    backgroundColor: '#22C55E',
+    backgroundColor: '#299e60',
     width: 24,
   },
   discountBadge: {
@@ -666,7 +661,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#DCFCE7',
   },
   categoryTagText: {
-    color: '#22C55E',
+    color: '#299e60',
   },
   productTitle: {
     fontSize: 22,
@@ -683,7 +678,7 @@ const styles = StyleSheet.create({
   currentPrice: {
     fontSize: 28,
     fontWeight: '800',
-    color: '#22C55E',
+    color: '#299e60',
   },
   originalPrice: {
     fontSize: 18,
@@ -716,7 +711,7 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   inStockText: {
-    color: '#22C55E',
+    color: '#299e60',
   },
   outOfStockText: {
     color: '#EF4444',
@@ -745,7 +740,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   variantButtonActive: {
-    borderColor: '#22C55E',
+    borderColor: '#299e60',
     backgroundColor: '#F0FDF4',
   },
   variantButtonDisabled: {
@@ -757,7 +752,7 @@ const styles = StyleSheet.create({
     color: '#374151',
   },
   variantButtonTextActive: {
-    color: '#22C55E',
+    color: '#299e60',
   },
   variantButtonTextDisabled: {
     color: '#9CA3AF',
@@ -861,7 +856,7 @@ const styles = StyleSheet.create({
   },
   bottomBar: {
     position: 'absolute',
-    bottom: 0,
+    bottom: Platform.OS === 'ios' ? 88 : 70, // Above tab bar
     left: 0,
     right: 0,
     flexDirection: 'row',
@@ -879,7 +874,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 14,
     borderWidth: 2,
-    borderColor: '#22C55E',
+    borderColor: '#299e60',
     backgroundColor: '#fff',
   },
   buttonDisabled: {
@@ -888,7 +883,7 @@ const styles = StyleSheet.create({
   addToCartText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#22C55E',
+    color: '#299e60',
     marginLeft: 8,
   },
   buyNowButton: {
@@ -897,7 +892,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 14,
     borderRadius: 14,
-    backgroundColor: '#22C55E',
+    backgroundColor: '#299e60',
   },
   buyNowButtonDisabled: {
     backgroundColor: '#9CA3AF',

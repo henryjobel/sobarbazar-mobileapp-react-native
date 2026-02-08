@@ -20,9 +20,13 @@ const BANNER_IMAGES = [
   require('../../assets/images/banners/slider5.jpeg'),
 ]
 
-export default function BigSaleBanner() {
+interface BannerProps {
+  banners?: any[];
+}
+
+export default function BigSaleBanner({ banners }: BannerProps) {
   const [activeIndex, setActiveIndex] = useState(0)
-  const flatListRef = useRef(null)
+  const flatListRef = useRef<FlatList>(null)
   
   // Auto slide functionality
   useEffect(() => {
@@ -45,14 +49,14 @@ export default function BigSaleBanner() {
     return () => clearInterval(interval)
   }, [activeIndex])
 
-  const handleScroll = (event) => {
+  const handleScroll = (event: any) => {
     const slideSize = event.nativeEvent.layoutMeasurement.width
     const scrollPosition = event.nativeEvent.contentOffset.x
     const index = Math.round(scrollPosition / slideSize)
     setActiveIndex(index)
   }
 
-  const renderItem = ({ item, index }) => (
+  const renderItem = ({ item, index }: { item: any; index: number }) => (
     <TouchableOpacity
       activeOpacity={0.9}
       onPress={() => console.log(`Banner ${index + 1} pressed`)}

@@ -88,7 +88,7 @@ export default function CartToast({ visible, onHide, product, itemCount = 0 }: C
     >
       <View className="mx-4 mt-2 bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
         {/* Success Header */}
-        <View className="bg-green-500 px-4 py-3 flex-row items-center">
+        <View className="bg-main-600 px-4 py-3 flex-row items-center">
           <View className="w-8 h-8 bg-white/20 rounded-full items-center justify-center mr-3">
             <Ionicons name="checkmark" size={20} color="#fff" />
           </View>
@@ -119,7 +119,7 @@ export default function CartToast({ visible, onHide, product, itemCount = 0 }: C
               <Text className="text-gray-800 font-semibold text-sm" numberOfLines={2}>
                 {product.name}
               </Text>
-              <Text className="text-green-600 font-bold text-base mt-1">
+              <Text className="text-main-700 font-bold text-base mt-1">
                 ৳{product.price.toLocaleString()}
               </Text>
             </View>
@@ -136,7 +136,7 @@ export default function CartToast({ visible, onHide, product, itemCount = 0 }: C
             <Text className="text-gray-700 font-semibold">Continue Shopping</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            className="flex-1 py-3 rounded-xl bg-green-500 items-center flex-row justify-center"
+            className="flex-1 py-3 rounded-xl bg-main-600 items-center flex-row justify-center"
             onPress={handleViewCart}
             activeOpacity={0.8}
           >
