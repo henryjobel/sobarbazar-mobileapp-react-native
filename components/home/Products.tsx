@@ -16,6 +16,7 @@ import { Image } from 'expo-image';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { useCartNotification } from '../../context/CartNotificationContext';
+import { getExclusiveProducts } from '../../utils/api';
 
 const { width } = Dimensions.get('window');
 const itemWidth = (width - 48) / 2;
@@ -71,17 +72,44 @@ interface ProductsProps {
   recommendedProducts?: ProductType[];
 }
 
+// Unified list item — either a regular product or an exclusive one
+type ListItem =
+  | ({ _type: 'regular' } & ProductType)
+  | { _type: 'exclusive'; id: number; name: string; image?: string; image_url?: string; unit_price?: number; display_price?: number; regular_price?: number; selling_price?: string; discount_amount?: number; product_type?: string; is_variable?: boolean; qty?: number; stock_quantity?: number; product_images?: any[] };
+
 const Products = ({ recommendedProducts }: ProductsProps) => {
   const router = useRouter();
-  const { addItem, itemCount } = useCart();
+  const { addItem, addDropshippingItem, itemCount } = useCart();
   const { isInWishlist, addToWishlist, removeFromWishlist } = useWishlist();
   const { showNotification, setNavigateToCart } = useCartNotification();
   const [products, setProducts] = useState<ProductType[]>([]);
+  const [exclusives, setExclusives] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [addingToCart, setAddingToCart] = useState<number | null>(null);
+  const [addingExclusive, setAddingExclusive] = useState<number | null>(null);
+
+  // Interleave: insert 2 exclusive cards after every 4 regular cards
+  const buildMixedList = (regularList: ProductType[], exclusiveList: any[]): ListItem[] => {
+    const result: ListItem[] = [];
+    let eIdx = 0;
+    for (let i = 0; i < regularList.length; i++) {
+      result.push({ _type: 'regular', ...regularList[i] });
+      if ((i + 1) % 4 === 0 && eIdx < exclusiveList.length) {
+        result.push({ _type: 'exclusive', ...exclusiveList[eIdx++] });
+        if (eIdx < exclusiveList.length) {
+          result.push({ _type: 'exclusive', ...exclusiveList[eIdx++] });
+        }
+      }
+    }
+    // Append remaining exclusives at the end if any
+    while (eIdx < exclusiveList.length) {
+      result.push({ _type: 'exclusive', ...exclusiveList[eIdx++] });
+    }
+    return result;
+  };
 
   // Set up navigation callback for cart notification
   useEffect(() => {
@@ -151,53 +179,43 @@ const Products = ({ recommendedProducts }: ProductsProps) => {
 
       console.log(`🔄 Loading page ${pageNum}...`);
       
-      // সরাসরি fetch করি
-      const data = await fetchProductsDirectly(pageNum);
-      
+      // Fetch regular products + exclusive on first page
+      const [data, exclusiveData] = await Promise.all([
+        fetchProductsDirectly(pageNum),
+        pageNum === 1 ? getExclusiveProducts(1, 20).catch(() => ({ results: [] })) : Promise.resolve(null),
+      ]);
+
       console.log(`📊 Received ${data?.length || 0} products`);
       
       if (data && Array.isArray(data) && data.length > 0) {
-        console.log("✅ Valid products array received");
-        console.log("🔍 First product sample:", {
-          id: data[0].id,
-          name: data[0].name,
-          price: data[0].price,
-          images: data[0].images
-        });
-        
-        // Transform data - keep original structure for proper handling
-        const transformedData = data.map((item: any) => {
-          return {
-            id: item.id,
-            name: item.name || 'No Name',
-            description: item.description,
-            default_variant: item.default_variant,
-            variants: item.variants,
-            images: item.images || [],
-            rating: item.rating || 0,
-            unit: item.unit || 'piece',
-            category: item.category,
-            brand: item.brand,
-            store: item.store,
-            subcategories: item.subcategories || []
-          };
-        });
+        const transformedData = data.map((item: any) => ({
+          id: item.id,
+          name: item.name || 'No Name',
+          description: item.description,
+          default_variant: item.default_variant,
+          variants: item.variants,
+          images: item.images || [],
+          rating: item.rating || 0,
+          unit: item.unit || 'piece',
+          category: item.category,
+          brand: item.brand,
+          store: item.store,
+          subcategories: item.subcategories || [],
+        }));
 
         if (pageNum === 1) {
           setProducts(transformedData);
         } else {
           setProducts(prev => [...prev, ...transformedData]);
         }
-        
-        // Check if there's more data
-        if (data.length < 20) {
-          setHasMore(false);
-          console.log("📌 No more products to load");
-        } else {
-          setHasMore(true);
-        }
+        setHasMore(data.length >= 20);
       } else {
-        console.log("⚠️ No valid products received");
+        if (pageNum === 1) setProducts([]);
+        setHasMore(false);
+      }
+
+      if (exclusiveData && pageNum === 1) {
+        setExclusives(exclusiveData.results || []);
       }
     } catch (error) {
       console.error('❌ Error loading products:', error);
@@ -229,9 +247,14 @@ const Products = ({ recommendedProducts }: ProductsProps) => {
   };
 
   // Handle product press - use Expo Router
-  const handleProductPress = (product: ProductType) => {
+  const handleProductPress = (product: ProductType & { is_exclusive?: boolean; exclusive_id?: number }) => {
     console.log("👉 Product pressed:", product.id, product.name);
-    router.push(`/screens/product/${product.id}`);
+    if (product.is_exclusive) {
+      const exclusiveId = product.exclusive_id || product.id;
+      router.push(`/screens/exclusive/${exclusiveId}`);
+    } else {
+      router.push(`/screens/product/${product.id}`);
+    }
   };
 
   // Handle add to cart - using CartContext with nice popup
@@ -395,7 +418,64 @@ const Products = ({ recommendedProducts }: ProductsProps) => {
   };
 
   // Render product item
-  const renderProduct = ({ item }: { item: ProductType }) => {
+  const renderProduct = ({ item }: { item: ListItem }) => {
+    // ── Exclusive / RAKAMARI card ──────────────────────────────────────────
+    if (item._type === 'exclusive') {
+      const price = item.unit_price || item.display_price || 0;
+      const imgUrl = item.image || item.image_url || 'https://via.placeholder.com/300';
+      const isVar = item.product_type === 'variable' || item.is_variable;
+      const isAdding = addingExclusive === item.id;
+
+      return (
+        <TouchableOpacity
+          style={styles.productContainer}
+          onPress={() => router.push(`/screens/exclusive/${item.id}` as any)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.imageContainer}>
+            <Image
+              source={{ uri: imgUrl }}
+              style={styles.image}
+              contentFit="cover"
+              transition={200}
+            />
+            <View style={styles.exclusiveBadgeOnCard}>
+              <Text style={styles.exclusiveBadgeText}>RAKAMARI</Text>
+            </View>
+          </View>
+          <View style={styles.infoContainer}>
+            <Text style={styles.categoryText} numberOfLines={1}>Rakamari</Text>
+            <Text style={styles.nameText} numberOfLines={2}>{item.name}</Text>
+            <View style={styles.priceContainer}>
+              <Text style={styles.priceText}>৳{price.toLocaleString()}</Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.addToCartButton, isAdding && styles.addingButton]}
+              onPress={async () => {
+                if (isVar) { router.push(`/screens/exclusive/${item.id}` as any); return; }
+                setAddingExclusive(item.id);
+                try {
+                  const imgId = item.product_images?.[0]?.id || 0;
+                  await addDropshippingItem({ productId: item.id, droplooImageId: imgId, unitPrice: price, quantity: 1, name: item.name, image: imgUrl });
+                } catch {} finally { setAddingExclusive(null); }
+              }}
+              disabled={isAdding}
+            >
+              {isAdding ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="cart-outline" size={16} color="#fff" />
+                  <Text style={styles.addToCartText}>{isVar ? 'Select' : 'Add'}</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      );
+    }
+
+    // ── Regular product card ───────────────────────────────────────────────
     const isFavorite = isInWishlist(item.id);
     const stock = item.default_variant?.available_stock ?? item.default_variant?.stock ?? 10;
     const isOutOfStock = stock <= 0;
@@ -526,50 +606,53 @@ const Products = ({ recommendedProducts }: ProductsProps) => {
       {/* Section Header */}
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>All Products</Text>
-        <Text style={styles.productCount}>({products.length} items)</Text>
+        <Text style={styles.productCount}>({products.length + exclusives.length} items)</Text>
       </View>
 
       {/* Products Grid */}
-      {products.length > 0 ? (
-        <FlatList
-          data={products}
-          renderItem={renderProduct}
-          keyExtractor={(item) => item.id.toString()}
-          numColumns={2}
-          columnWrapperStyle={styles.row}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={['#4CAF50']}
-              tintColor="#4CAF50"
-            />
-          }
-          onEndReached={loadMore}
-          onEndReachedThreshold={0.5}
-          ListFooterComponent={
-            loading && products.length > 0 ? (
-              <View style={styles.footerContainer}>
-                <ActivityIndicator size="small" color="#4CAF50" />
-                <Text style={styles.footerText}>Loading more...</Text>
-              </View>
-            ) : null
-          }
-        />
-      ) : (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="cube-outline" size={64} color="#ccc" />
-          <Text style={styles.emptyText}>No products available</Text>
-          <TouchableOpacity
-            style={styles.retryButton}
-            onPress={onRefresh}
-          >
-            <Ionicons name="refresh" size={20} color="#fff" />
-            <Text style={styles.retryText}>Refresh Products</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      {(() => {
+        const mixedList = buildMixedList(products, exclusives);
+        return mixedList.length > 0 ? (
+          <FlatList
+            data={mixedList}
+            renderItem={renderProduct}
+            keyExtractor={(item: ListItem) => `${item._type}-${item.id}`}
+            numColumns={2}
+            columnWrapperStyle={styles.row}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={['#4CAF50']}
+                tintColor="#4CAF50"
+              />
+            }
+            onEndReached={loadMore}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={
+              loading && products.length > 0 ? (
+                <View style={styles.footerContainer}>
+                  <ActivityIndicator size="small" color="#4CAF50" />
+                  <Text style={styles.footerText}>Loading more...</Text>
+                </View>
+              ) : null
+            }
+          />
+        ) : (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="cube-outline" size={64} color="#ccc" />
+            <Text style={styles.emptyText}>No products available</Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={onRefresh}
+            >
+              <Ionicons name="refresh" size={20} color="#fff" />
+              <Text style={styles.retryText}>Refresh Products</Text>
+            </TouchableOpacity>
+          </View>
+        );
+      })()}
     </View>
   );
 };
@@ -595,6 +678,20 @@ const styles = StyleSheet.create({
   productCount: {
     fontSize: 12,
     color: '#666',
+  },
+  exclusiveBadgeOnCard: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    backgroundColor: '#1a3c34',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  exclusiveBadgeText: {
+    color: '#f59e0b',
+    fontSize: 9,
+    fontWeight: 'bold',
   },
   productContainer: {
     width: itemWidth,

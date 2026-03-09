@@ -10,6 +10,8 @@ import {
   removeFromCart as apiRemoveFromCart,
   clearCart as apiClearCart,
   createOrder as apiCreateOrder,
+  addDropshippingToCart as apiAddDropshipping,
+  removeDropshippingFromCart as apiRemoveDropshipping,
 } from '@/utils/api';
 import { getUserData } from '@/hooks/useUser';
 import GuestCheckoutModal from '@/components/ui/GuestCheckoutModal';
@@ -85,7 +87,21 @@ interface ShippingAddress {
 interface OrderData {
   shipping_address: ShippingAddress;
   payment_method: 'COD' | 'OP';
+  delivery_method?: string;
   notes?: string;
+}
+
+interface DropshippingItem {
+  id: number;
+  droploo_product_id: number;
+  droploo_image_id: number;
+  name?: string;
+  image?: string;
+  color?: string;
+  size?: string;
+  unit_price: number;
+  quantity: number;
+  total_price?: number;
 }
 
 interface CartContextType {
@@ -94,9 +110,11 @@ interface CartContextType {
   isLoading: boolean;
   itemCount: number;
   subtotal: number;
+  dropshippingSubtotal: number;
   total: number;
   deliveryCharge: number;
   shippingArea: 'IN' | 'OUT';
+  dropshippingItems: DropshippingItem[];
   addItem: (product: any, quantity?: number, variant?: any) => Promise<boolean>;
   updateQuantity: (itemId: number, quantity: number) => Promise<boolean>;
   removeItem: (itemId: number) => Promise<boolean>;
@@ -105,6 +123,8 @@ interface CartContextType {
   refreshCart: () => Promise<void>;
   setShippingArea: (area: 'IN' | 'OUT') => void;
   initializeCart: () => Promise<void>;
+  addDropshippingItem: (params: { productId: number; droplooImageId: number; size?: string; color?: string; unitPrice: number; quantity?: number; name?: string; image?: string }) => Promise<boolean>;
+  removeDropshippingItem: (itemId: number) => Promise<boolean>;
 }
 
 // Create Context
@@ -120,6 +140,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [cartId, setCartId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [shippingArea, setShippingAreaState] = useState<'IN' | 'OUT'>('IN');
+  const [dropshippingItems, setDropshippingItems] = useState<DropshippingItem[]>([]);
   const [showGuestModal, setShowGuestModal] = useState(false);
   const [isGuestMode, setIsGuestMode] = useState(false);
   const [pendingAddItem, setPendingAddItem] = useState<{
@@ -129,12 +150,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
   } | null>(null);
 
   // Calculate derived values
-  const itemCount = cart?.items?.reduce((sum, item) => sum + item.quantity, 0) || 0;
+  const regularItemCount = cart?.items?.reduce((sum, item) => sum + item.quantity, 0) || 0;
+  const dropshippingItemCount = dropshippingItems.reduce((sum, item) => sum + item.quantity, 0);
+  const itemCount = regularItemCount + dropshippingItemCount;
   const subtotal = cart?.subtotal || cart?.total_amount || 0;
+  const dropshippingSubtotal = dropshippingItems.reduce((sum, item) => sum + (item.unit_price * item.quantity), 0);
   const deliveryCharge = shippingArea === 'IN'
     ? (cart?.delivery_charge_inside_dhaka || 60)
     : (cart?.delivery_charge_outside_dhaka || 120);
-  const total = subtotal - (cart?.coupon_discount || 0) + deliveryCharge;
+  const total = subtotal + dropshippingSubtotal - (cart?.coupon_discount || 0) + deliveryCharge;
 
   // Initialize cart on mount
   useEffect(() => {
@@ -168,6 +192,22 @@ export function CartProvider({ children }: { children: ReactNode }) {
           console.log('✅ CartContext: Loaded existing cart with', existingCart.items?.length || 0, 'items');
           setCart(existingCart);
           setCartId(existingCart.id);
+          // Sync dropshipping items
+          if (Array.isArray(existingCart.dropshipping_items)) {
+            const mapped = existingCart.dropshipping_items.map((d: any) => ({
+              id: d.id,
+              droploo_product_id: d.product,
+              droploo_image_id: d.droploo_image_id || 0,
+              name: d.product_name,
+              image: d.product_image_url || undefined,
+              color: d.color || undefined,
+              size: d.size || undefined,
+              unit_price: parseFloat(d.unit_price) || 0,
+              quantity: d.quantity || 1,
+              total_price: parseFloat(d.subtotal) || 0,
+            }));
+            setDropshippingItems(mapped);
+          }
           return;
         }
       }
@@ -206,6 +246,22 @@ export function CartProvider({ children }: { children: ReactNode }) {
       if (updatedCart && updatedCart.id) {
         console.log('✅ CartContext: Cart refreshed with', updatedCart.items?.length || 0, 'items');
         setCart(updatedCart);
+        // Sync dropshipping items from backend
+        if (Array.isArray(updatedCart.dropshipping_items)) {
+          const mapped = updatedCart.dropshipping_items.map((d: any) => ({
+            id: d.id,
+            droploo_product_id: d.product,
+            droploo_image_id: d.droploo_image_id || 0,
+            name: d.product_name,
+            image: d.product_image_url || undefined,
+            color: d.color || undefined,
+            size: d.size || undefined,
+            unit_price: parseFloat(d.unit_price) || 0,
+            quantity: d.quantity || 1,
+            total_price: parseFloat(d.subtotal) || 0,
+          }));
+          setDropshippingItems(mapped);
+        }
       }
     } catch (error) {
       console.error('❌ CartContext: Refresh error:', error);
@@ -359,6 +415,77 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setShippingAreaState(area);
   }, []);
 
+  const addDropshippingItem = useCallback(async (params: {
+    productId: number;
+    droplooImageId: number;
+    size?: string;
+    color?: string;
+    unitPrice: number;
+    quantity?: number;
+    name?: string;
+    image?: string;
+  }): Promise<boolean> => {
+    const user = await getUserData();
+    if (!user && !isGuestMode) {
+      setShowGuestModal(true);
+      return false;
+    }
+    try {
+      setIsLoading(true);
+      let currentCartId = cartId;
+      if (!currentCartId) {
+        const newCart = await getOrCreateCart();
+        if (newCart && newCart.id) {
+          await SecureStore.setItemAsync(CART_ID_KEY, newCart.id);
+          setCart(newCart);
+          setCartId(newCart.id);
+          currentCartId = newCart.id;
+        } else return false;
+      }
+
+      const token = await SecureStore.getItemAsync('access_token');
+      const result = await apiAddDropshipping(currentCartId, token, {
+        productId: params.productId,
+        droplooImageId: params.droplooImageId,
+        size: params.size || '',
+        color: params.color || '',
+        unitPrice: params.unitPrice,
+        quantity: params.quantity || 1,
+      });
+
+      if (result.success) {
+        // Refresh cart from backend to get accurate dropshipping_items with real IDs
+        await refreshCart();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('❌ Add Dropshipping Error:', error);
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [cartId, refreshCart, isGuestMode]);
+
+  const removeDropshippingItem = useCallback(async (itemId: number): Promise<boolean> => {
+    if (!cartId) return false;
+    try {
+      setIsLoading(true);
+      const token = await SecureStore.getItemAsync('access_token');
+      const result = await apiRemoveDropshipping(cartId, token, itemId);
+      if (result.success) {
+        setDropshippingItems(prev => prev.filter(item => item.id !== itemId));
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('❌ Remove Dropshipping Error:', error);
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [cartId]);
+
   const checkout = useCallback(async (orderData: OrderData): Promise<{ success: boolean; orderId?: string; payment_url?: string; error?: string }> => {
     if (!cartId) {
       return { success: false, error: 'No cart found' };
@@ -382,6 +509,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
         payment_method: orderData.payment_method,
         area: orderData.shipping_address.area,
       };
+
+      if (orderData.delivery_method) {
+        orderPayload.delivery_method = orderData.delivery_method;
+      }
 
       // For guest users, add all required fields
       if (!isAuthenticated) {
@@ -473,9 +604,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
         isLoading,
         itemCount,
         subtotal,
+        dropshippingSubtotal,
         total,
         deliveryCharge,
         shippingArea,
+        dropshippingItems,
         addItem,
         updateQuantity,
         removeItem,
@@ -484,6 +617,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
         refreshCart,
         setShippingArea,
         initializeCart,
+        addDropshippingItem,
+        removeDropshippingItem,
       }}
     >
       {children}
@@ -511,6 +646,7 @@ export function useCart() {
       isLoading: false,
       itemCount: 0,
       subtotal: 0,
+      dropshippingSubtotal: 0,
       total: 0,
       deliveryCharge: 60,
       shippingArea: 'IN' as const,
@@ -522,7 +658,10 @@ export function useCart() {
       refreshCart: async () => {},
       setShippingArea: () => {},
       initializeCart: async () => {},
-    };
+      dropshippingItems: [] as import('./CartContext').DropshippingItem[] extends never ? any[] : any[],
+      addDropshippingItem: async () => false,
+      removeDropshippingItem: async () => {},
+    } as CartContextType;
   }
   return context;
 }

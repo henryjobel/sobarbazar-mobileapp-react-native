@@ -1,6 +1,6 @@
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -18,6 +18,14 @@ import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
+
+const API_BASE_URL = 'https://api.hetdcl.com';
+
+const DELIVERY_LABELS: Record<string, { name: string; eta: string }> = {
+  steadfast: { name: 'Steadfast', eta: '2–3 business days' },
+  pathao:    { name: 'Pathao',    eta: '1–2 business days' },
+  custom:    { name: 'Custom Delivery', eta: 'Varies' },
+};
 
 type ShippingArea = 'IN' | 'OUT';
 type PaymentMethod = 'COD' | 'OP';
@@ -44,13 +52,31 @@ export default function CheckoutScreen() {
     subtotal,
     total,
     deliveryCharge,
+    dropshippingItems,
+    dropshippingSubtotal,
   } = useCart();
 
   const cartItems = cart?.items || [];
+  const totalItems = cartItems.length + dropshippingItems.length;
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('COD');
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedDelivery, setSelectedDelivery] = useState<string | null>(null);
+  const [availableMethods, setAvailableMethods] = useState<string[]>([]);
+
+  // Fetch available delivery methods
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/api/v1.0/stores/delivery/available-methods/`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.methods?.length) {
+          setAvailableMethods(data.methods);
+          setSelectedDelivery(data.methods[0]);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const [address, setAddress] = useState<ShippingAddress>({
     name: user?.name || user?.first_name || '',
@@ -90,7 +116,7 @@ export default function CheckoutScreen() {
       return;
     }
 
-    if (cartItems.length === 0) {
+    if (totalItems === 0) {
       Alert.alert('Error', 'Your cart is empty');
       return;
     }
@@ -107,6 +133,7 @@ export default function CheckoutScreen() {
           area: shippingArea,
         },
         payment_method: paymentMethod,
+        delivery_method: selectedDelivery || undefined,
         notes,
       });
 
@@ -228,7 +255,7 @@ export default function CheckoutScreen() {
     return result;
   };
 
-  if (cartItems.length === 0) {
+  if (totalItems === 0) {
     return (
       <SafeAreaView style={styles.emptyContainer}>
         <Ionicons name="cart-outline" size={80} color="#D1D5DB" />
@@ -285,6 +312,44 @@ export default function CheckoutScreen() {
                 </View>
               </View>
             ))}
+
+            {/* RAKAMARI exclusive items */}
+            {dropshippingItems.length > 0 && (
+              <>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12, marginBottom: 6 }}>
+                  <View style={{ backgroundColor: '#f59e0b', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20 }}>
+                    <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 12 }}>RAKAMARI</Text>
+                  </View>
+                  <Text style={{ marginLeft: 8, color: '#6B7280', fontWeight: '500' }}>Exclusive Items</Text>
+                </View>
+                {dropshippingItems.map((item: any) => (
+                  <View key={item.id || item.droploo_product_id} style={[styles.orderItem, { borderColor: '#FCD34D' }]}>
+                    <View style={styles.itemImageContainer}>
+                      <Image
+                        source={{ uri: item.image || 'https://via.placeholder.com/80/f59e0b/FFFFFF?text=R' }}
+                        style={styles.itemImage}
+                        contentFit="cover"
+                      />
+                    </View>
+                    <View style={styles.itemInfo}>
+                      <Text style={styles.itemName} numberOfLines={2}>{item.name || 'RAKAMARI Product'}</Text>
+                      {(item.color || item.size) ? (
+                        <Text style={[styles.itemVariant, { color: '#92400e' }]}>{[item.color, item.size].filter(Boolean).join(' / ')}</Text>
+                      ) : null}
+                      <View style={styles.itemBottom}>
+                        <View style={styles.priceContainer}>
+                          <Text style={[styles.itemPrice, { color: '#d97706' }]}>৳{item.unit_price?.toLocaleString()}</Text>
+                          <Text style={styles.itemQty}>Qty: {item.quantity}</Text>
+                        </View>
+                        <View style={[styles.totalBadge, { backgroundColor: '#f59e0b' }]}>
+                          <Text style={styles.totalBadgeText}>৳{(item.unit_price * item.quantity).toLocaleString()}</Text>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                ))}
+              </>
+            )}
           </View>
         </View>
 
@@ -417,6 +482,36 @@ export default function CheckoutScreen() {
           </View>
         </View>
 
+        {/* Delivery Method */}
+        {availableMethods.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Delivery Method</Text>
+            <View style={styles.paymentOptions}>
+              {availableMethods.map((method) => {
+                const label = DELIVERY_LABELS[method] || { name: method, eta: '' };
+                const isSelected = selectedDelivery === method;
+                return (
+                  <TouchableOpacity
+                    key={method}
+                    style={[styles.paymentOption, isSelected && styles.paymentOptionActive]}
+                    onPress={() => setSelectedDelivery(method)}
+                    disabled={isSubmitting}
+                  >
+                    <Ionicons name="car-outline" size={26} color={isSelected ? '#299e60' : '#6B7280'} />
+                    <View style={styles.paymentInfo}>
+                      <Text style={[styles.paymentTitle, isSelected && styles.paymentTitleActive]}>{label.name}</Text>
+                      <Text style={styles.paymentSubtitle}>{label.eta}</Text>
+                    </View>
+                    <View style={[styles.radioOuter, isSelected && styles.radioOuterActive]}>
+                      {isSelected && <View style={styles.radioInner} />}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
         {/* Payment Method */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Payment Method</Text>
@@ -486,6 +581,12 @@ export default function CheckoutScreen() {
             <Text style={styles.priceLabel}>Subtotal</Text>
             <Text style={styles.priceValue}>৳{subtotal.toLocaleString()}</Text>
           </View>
+          {(dropshippingSubtotal || 0) > 0 && (
+            <View style={styles.priceRow}>
+              <Text style={styles.priceLabel}>Rakamari Items</Text>
+              <Text style={[styles.priceValue, { color: '#d97706' }]}>৳{(dropshippingSubtotal || 0).toLocaleString()}</Text>
+            </View>
+          )}
           {(cart?.coupon_discount || 0) > 0 && (
             <View style={styles.priceRow}>
               <Text style={styles.priceLabel}>Coupon Discount</Text>

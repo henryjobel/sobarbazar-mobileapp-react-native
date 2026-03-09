@@ -211,7 +211,14 @@ export default function NewArrivalsSection({
               key={product.id}
               className="bg-white rounded-2xl mr-3 overflow-hidden shadow-sm border border-gray-100"
               style={{ width: CARD_WIDTH }}
-              onPress={() => router.push(`/screens/product/${product.id}`)}
+              onPress={() => {
+                if ((product as any).is_exclusive) {
+                  const exclusiveId = (product as any).exclusive_id || product.id;
+                  router.push(`/screens/exclusive/${exclusiveId}`);
+                } else {
+                  router.push(`/screens/product/${product.id}`);
+                }
+              }}
               activeOpacity={0.9}
             >
               {/* Image */}

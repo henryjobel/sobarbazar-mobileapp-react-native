@@ -19,6 +19,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
+import { getExclusiveProducts } from '../../utils/api';
 
 const { width } = Dimensions.get('window');
 const ITEM_WIDTH = (width - 48) / 2;
@@ -94,13 +95,29 @@ interface FilterOptions {
   price_range: { min: number; max: number };
 }
 
+interface ExclusiveProduct {
+  id: number;
+  name: string;
+  image?: string;
+  image_url?: string;
+  unit_price?: number;
+  display_price?: number;
+  regular_price?: number;
+  selling_price?: number;
+  discount_amount?: number;
+  product_type?: string;
+  is_variable?: boolean;
+  qty?: number;
+  stock_quantity?: number;
+}
+
 type ViewMode = 'grid' | 'list';
 type SortOption = 'popular' | 'latest' | 'price-low' | 'price-high';
 
 export default function ShopScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { addItem } = useCart();
+  const { addItem, addDropshippingItem } = useCart();
   const { isInWishlist, addToWishlist, removeFromWishlist } = useWishlist();
 
   // URL params
@@ -138,6 +155,22 @@ export default function ShopScreen() {
   const [showSortModal, setShowSortModal] = useState(false);
   const [filterTab, setFilterTab] = useState<'category' | 'brand' | 'rating'>('category');
   const [addingToCartId, setAddingToCartId] = useState<number | null>(null);
+
+  // RAKAMARI exclusive products (shown when no filters active, same as frontend)
+  const [exclusiveProducts, setExclusiveProducts] = useState<ExclusiveProduct[]>([]);
+  const [addingExclusiveId, setAddingExclusiveId] = useState<number | null>(null);
+
+  const shouldIncludeExclusive = !selectedCategory && !selectedBrand && !selectedStore;
+
+  const fetchExclusiveProducts = useCallback(async () => {
+    if (!shouldIncludeExclusive) { setExclusiveProducts([]); return; }
+    try {
+      const data = await getExclusiveProducts(1, 20, null, searchText || null);
+      setExclusiveProducts(data.results || []);
+    } catch {
+      setExclusiveProducts([]);
+    }
+  }, [shouldIncludeExclusive, searchText]);
 
   // Fetch products from API
   const fetchProducts = useCallback(async (page: number = 1, reset: boolean = false) => {
@@ -250,10 +283,12 @@ export default function ShopScreen() {
     try {
       const res = await fetch(`${BASE_URL}/api/v1.0/customers/products/filter_options/`);
       if (res.ok) {
-        const data = await res.json();
-        setFilterOptions(data);
-        if (data.price_range) {
-          setPriceRange([data.price_range.min, data.price_range.max]);
+        const json = await res.json();
+        // Backend wraps: { success, data: { categories, brands, price_range } }
+        const opts = json?.data ?? json;
+        setFilterOptions(opts);
+        if (opts?.price_range) {
+          setPriceRange([opts.price_range.min, opts.price_range.max]);
         }
       }
     } catch (error) {
@@ -280,11 +315,13 @@ export default function ShopScreen() {
     fetchCategories();
     fetchBrands();
     fetchFilterOptions();
+    fetchExclusiveProducts();
   }, []);
 
   // Refetch when filters change
   useEffect(() => {
     fetchProducts(1, true);
+    fetchExclusiveProducts();
   }, [selectedCategory, selectedBrand, selectedStore, selectedRating, sortBy]);
 
   // Fetch store data when store filter changes
@@ -328,6 +365,29 @@ export default function ShopScreen() {
   // Handle search submit
   const handleSearchSubmit = () => {
     fetchProducts(1, true);
+    fetchExclusiveProducts();
+  };
+
+  // Handle add exclusive product to cart
+  const handleAddExclusiveToCart = async (product: ExclusiveProduct) => {
+    if (product.product_type === 'variable' || product.is_variable) {
+      router.push(`/screens/exclusive/${product.id}` as any);
+      return;
+    }
+    setAddingExclusiveId(product.id);
+    try {
+      const imageId = (product as any).product_images?.[0]?.id || 0;
+      await addDropshippingItem({
+        productId: product.id,
+        droplooImageId: imageId,
+        unitPrice: product.unit_price || product.display_price || Number(product.selling_price) || 0,
+        quantity: 1,
+        name: product.name,
+        image: product.image || product.image_url || '',
+      });
+    } catch { /* silent */ } finally {
+      setAddingExclusiveId(null);
+    }
   };
 
   // Clear all filters
@@ -339,7 +399,7 @@ export default function ShopScreen() {
     setSearchText('');
     setSortBy('popular');
     if (filterOptions?.price_range) {
-      setPriceRange([filterOptions.price_range.min, filterOptions.price_range.max]);
+      setPriceRange([filterOptions.price_range.min ?? 0, filterOptions.price_range.max ?? 500000]);
     }
   };
 
@@ -917,45 +977,99 @@ export default function ShopScreen() {
       {/* Store Info Card (if filtered by store) */}
       {renderStoreInfo()}
 
-      {/* Products */}
-      {isLoading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#299e60" />
-          <Text style={styles.loadingText}>Loading products...</Text>
-        </View>
-      ) : products.length === 0 ? (
-        renderEmptyState()
-      ) : (
-        <FlatList
-          key={viewMode}
-          data={products}
-          renderItem={renderProductCard}
-          keyExtractor={(item) => item.id.toString()}
-          numColumns={viewMode === 'grid' ? 2 : 1}
-          columnWrapperStyle={viewMode === 'grid' ? styles.productRow : undefined}
-          contentContainerStyle={styles.productList}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={() => {
-                setIsRefreshing(true);
-                fetchProducts(1, true);
-              }}
-              colors={['#299e60']}
-            />
-          }
-          ListFooterComponent={
-            <>
-              {isLoadingMore && (
-                <View style={styles.loadingMore}>
-                  <ActivityIndicator size="small" color="#299e60" />
+      {/* Products — FlatList always renders so ListFooterComponent (exclusive section) always shows */}
+      <FlatList
+        key={viewMode}
+        data={products}
+        renderItem={renderProductCard}
+        keyExtractor={(item) => item.id.toString()}
+        numColumns={viewMode === 'grid' ? 2 : 1}
+        columnWrapperStyle={viewMode === 'grid' ? styles.productRow : undefined}
+        contentContainerStyle={styles.productList}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => {
+              setIsRefreshing(true);
+              fetchProducts(1, true);
+            }}
+            colors={['#299e60']}
+          />
+        }
+        ListHeaderComponent={
+          isLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#299e60" />
+              <Text style={styles.loadingText}>Loading products...</Text>
+            </View>
+          ) : products.length === 0 && exclusiveProducts.length === 0 ? (
+            renderEmptyState()
+          ) : products.length === 0 ? (
+            <View style={styles.noRegularProducts}>
+              <Text style={styles.noRegularProductsText}>No regular products found for your search.</Text>
+              <Text style={styles.noRegularProductsSubText}>See RAKAMARI exclusive products below ↓</Text>
+            </View>
+          ) : null
+        }
+        ListFooterComponent={
+          <>
+            {isLoadingMore && (
+              <View style={styles.loadingMore}>
+                <ActivityIndicator size="small" color="#299e60" />
+              </View>
+            )}
+            {renderPagination()}
+
+            {/* RAKAMARI Exclusive Products section — shown when no filters active */}
+            {exclusiveProducts.length > 0 && (
+              <View style={styles.exclusiveSection}>
+                <View style={styles.exclusiveSectionHeader}>
+                  <View style={styles.exclusiveTitleRow}>
+                    <Ionicons name="star" size={18} color="#f59e0b" />
+                    <Text style={styles.exclusiveSectionTitle}> RAKAMARI Exclusive Products</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => router.push('/screens/rakamari' as any)}>
+                    <Text style={styles.exclusiveViewAll}>View All</Text>
+                  </TouchableOpacity>
                 </View>
-              )}
-              {renderPagination()}
-            </>
-          }
-        />
-      )}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.exclusiveScroll}>
+                  {exclusiveProducts.map(product => {
+                    const price = product.unit_price || product.display_price || Number(product.selling_price) || Number(product.regular_price) || 0;
+                    const isAdding = addingExclusiveId === product.id;
+                    const isVar = product.product_type === 'variable' || product.is_variable;
+                    const imgUrl = product.image || product.image_url || 'https://via.placeholder.com/200';
+                    return (
+                      <TouchableOpacity
+                        key={product.id}
+                        style={styles.exclusiveCard}
+                        onPress={() => router.push(`/screens/exclusive/${product.id}` as any)}
+                        activeOpacity={0.88}
+                      >
+                        <View style={styles.exclusiveBadgeWrap}>
+                          <Text style={styles.exclusiveBadge}>Exclusive</Text>
+                        </View>
+                        <Image source={{ uri: imgUrl }} style={styles.exclusiveCardImage} contentFit="contain" />
+                        <Text style={styles.exclusiveCardName} numberOfLines={2}>{product.name}</Text>
+                        <Text style={styles.exclusiveCardPrice}>৳{price.toLocaleString()}</Text>
+                        <TouchableOpacity
+                          style={[styles.exclusiveAddBtn, isAdding && styles.exclusiveAddBtnDisabled]}
+                          onPress={() => handleAddExclusiveToCart(product)}
+                          disabled={isAdding}
+                        >
+                          {isAdding
+                            ? <ActivityIndicator size="small" color="#fff" />
+                            : <Text style={styles.exclusiveAddBtnText}>{isVar ? 'Select' : '+ Add'}</Text>
+                          }
+                        </TouchableOpacity>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
+          </>
+        }
+      />
 
       {/* Modals */}
       {renderFilterModal()}
@@ -1403,6 +1517,23 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
   },
+  noRegularProducts: {
+    padding: 24,
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+  },
+  noRegularProductsText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  noRegularProductsSubText: {
+    fontSize: 13,
+    color: '#299e60',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
   pagination: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1444,6 +1575,98 @@ const styles = StyleSheet.create({
   },
   pageNumberTextActive: {
     color: '#fff',
+  },
+  // RAKAMARI Exclusive section styles
+  exclusiveSection: {
+    paddingHorizontal: 16,
+    paddingTop: 24,
+    paddingBottom: 8,
+    backgroundColor: '#fff',
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  exclusiveSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  exclusiveTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  exclusiveSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  exclusiveViewAll: {
+    fontSize: 13,
+    color: '#299e60',
+    fontWeight: '600',
+  },
+  exclusiveScroll: {
+    marginHorizontal: -4,
+  },
+  exclusiveCard: {
+    width: 150,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    padding: 10,
+    marginHorizontal: 5,
+    marginBottom: 8,
+  },
+  exclusiveBadgeWrap: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    zIndex: 1,
+    backgroundColor: '#EF4444',
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  exclusiveBadge: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  exclusiveCardImage: {
+    width: '100%',
+    height: 120,
+    borderRadius: 8,
+    marginBottom: 8,
+    backgroundColor: '#F3F4F6',
+  },
+  exclusiveCardName: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 4,
+    lineHeight: 16,
+  },
+  exclusiveCardPrice: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#299e60',
+    marginBottom: 8,
+  },
+  exclusiveAddBtn: {
+    backgroundColor: '#299e60',
+    borderRadius: 8,
+    paddingVertical: 7,
+    alignItems: 'center',
+  },
+  exclusiveAddBtnDisabled: {
+    backgroundColor: '#6EE7A0',
+  },
+  exclusiveAddBtnText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
   },
   modalOverlay: {
     flex: 1,

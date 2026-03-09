@@ -14,11 +14,14 @@ import { Image } from 'expo-image';
 const { width } = Dimensions.get('window');
 
 interface CategoryItem {
-  id: number;
+  id: number | string;
   name?: string;
   title?: string;
   image?: string | any;
   icon?: string;
+  isExclusive?: boolean;
+  droploo_id?: number;
+  image_url?: string;
   category?: {
     id: number;
     name: string;
@@ -27,24 +30,41 @@ interface CategoryItem {
 
 interface CategoryProps {
   categories?: CategoryItem[];
+  exclusiveCategories?: CategoryItem[];
 }
 
-const Category: React.FC<CategoryProps> = ({ categories }) => {
+const Category: React.FC<CategoryProps> = ({ categories, exclusiveCategories }) => {
   const router = useRouter();
 
-  // Use API categories if available, otherwise use local data
-  const displayCategories = categories && categories.length > 0
+  // Format regular categories
+  const regularFormatted = (categories && categories.length > 0
     ? categories.map(cat => ({
         id: cat.id,
         title: cat.name || cat.title || 'Category',
         image: cat.image || cat.icon,
-        categoryId: cat.category?.id,
+        isExclusive: false,
       }))
-    : Categories;
+    : Categories);
+
+  // Format exclusive/RAKAMARI categories and append
+  const exclusiveFormatted = (exclusiveCategories && exclusiveCategories.length > 0)
+    ? exclusiveCategories.map(cat => ({
+        id: `exclusive-${cat.droploo_id || cat.id}`,
+        title: cat.name || 'RAKAMARI',
+        image: cat.image_url || cat.image,
+        droploo_id: cat.droploo_id || cat.id,
+        isExclusive: true,
+      }))
+    : [];
+
+  const displayCategories = [...regularFormatted, ...exclusiveFormatted];
 
   const handleCategoryPress = (category: any) => {
-    // Navigate to category products with query string (now in tabs group)
-    router.push(`/(tabs)/shop?category=${category.id}&name=${encodeURIComponent(category.title)}`);
+    if (category.isExclusive) {
+      router.push(`/screens/rakamari?category=${category.droploo_id}&name=${encodeURIComponent(category.title)}`);
+    } else {
+      router.push(`/(tabs)/shop?category=${category.id}&name=${encodeURIComponent(category.title)}`);
+    }
   };
 
   const handleViewAll = () => {
@@ -76,22 +96,29 @@ const Category: React.FC<CategoryProps> = ({ categories }) => {
             style={styles.categoryCard}
             activeOpacity={0.7}
           >
-            <View style={styles.imageContainer}>
+            <View style={[styles.imageContainer, item.isExclusive && styles.exclusiveImageContainer]}>
               {typeof item.image === 'string' ? (
                 <Image
                   source={{ uri: item.image }}
                   style={styles.categoryImage}
                   contentFit="cover"
                 />
-              ) : (
+              ) : item.image ? (
                 <Image
                   source={item.image}
                   style={styles.categoryImage}
                   contentFit="cover"
                 />
+              ) : (
+                <Text style={{ fontSize: 22 }}>🌟</Text>
+              )}
+              {item.isExclusive && (
+                <View style={styles.exclusiveBadge}>
+                  <Text style={styles.exclusiveBadgeText}>R</Text>
+                </View>
               )}
             </View>
-            <Text style={styles.categoryTitle} numberOfLines={2}>
+            <Text style={[styles.categoryTitle, item.isExclusive && styles.exclusiveTitle]} numberOfLines={2}>
               {item.title || item.name}
             </Text>
           </TouchableOpacity>
@@ -169,6 +196,30 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 12,
     fontWeight: '600',
+  },
+  exclusiveImageContainer: {
+    borderColor: '#f59e0b',
+    borderWidth: 2,
+    backgroundColor: '#fffbeb',
+  },
+  exclusiveBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#f59e0b',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exclusiveBadgeText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '900',
+  },
+  exclusiveTitle: {
+    color: '#92400e',
   },
 });
 

@@ -110,8 +110,13 @@ const FlashSaleSection: React.FC<FlashSaleSectionProps> = ({
     }).start();
   }, []);
 
-  const handleProductPress = (product: Product) => {
-    router.push(`/screens/product/${product.id}`);
+  const handleProductPress = (product: Product & { is_exclusive?: boolean; exclusive_id?: number }) => {
+    if (product.is_exclusive) {
+      const exclusiveId = product.exclusive_id || product.id;
+      router.push(`/screens/exclusive/${exclusiveId}`);
+    } else {
+      router.push(`/screens/product/${product.id}`);
+    }
   };
 
   const handleAddToCart = (product: Product) => {

@@ -2,7 +2,7 @@
 import Constants from "expo-constants";
 
 // IMPORTANT: Change this to your local backend URL when testing locally
-// For local development: "http://10.0.2.2:8000" (Android emulator) or "http://localhost:8000" (iOS simulator)
+// For local development: "http://10.0.2.2:8000" (Android emulator) or "https://api.hetdcl.com" (iOS simulator)
 // For production: "https://api.hetdcl.com"
 const BASE_URL = Constants.expoConfig?.extra?.apiUrl || "https://api.hetdcl.com";
 const AUTH_URL = Constants.expoConfig?.extra?.authApiUrl || "https://api.hetdcl.com";
@@ -1335,6 +1335,187 @@ export async function getDashboardData() {
   } catch (err) {
     console.log("❌ Dashboard Error:", err.message);
     return null;
+  }
+}
+
+// ==================== EXCLUSIVE / RAKAMARI (DROPLOO) APIs ====================
+
+/**
+ * Normalizes a raw Droploo product from the backend to a consistent shape
+ * expected by all mobile components.
+ * Backend field  →  Mobile expected field
+ *  image_url     →  image
+ *  display_price →  unit_price
+ *  regular_price →  (used to calculate discount_amount)
+ *  is_variable   →  product_type ('variable'|'simple')
+ *  qty           →  stock_quantity
+ */
+function normalizeExclusiveProduct(p) {
+  const displayPrice = parseFloat(p.display_price || p.selling_price || p.regular_price || 0);
+  const regularPrice = parseFloat(p.regular_price || 0);
+  const discountAmount = Math.max(0, regularPrice - displayPrice);
+  return {
+    ...p,
+    image: p.image_url || p.image || null,
+    unit_price: displayPrice,
+    discount_amount: discountAmount,
+    product_type: p.is_variable ? 'variable' : 'simple',
+    stock_quantity: p.qty ?? p.stock_quantity ?? 0,
+  };
+}
+
+export async function getExclusiveProducts(page = 1, limit = 20, category = null, search = null, minPrice = null, maxPrice = null, ordering = null) {
+  const params = new URLSearchParams();
+  params.append('page', page.toString());
+  params.append('page_size', limit.toString());
+  if (category) params.append('category_name', category);   // filter by category_name string
+  if (search) params.append('search', search);
+  if (minPrice) params.append('min_price', minPrice.toString());
+  if (maxPrice) params.append('max_price', maxPrice.toString());
+  if (ordering) params.append('ordering', ordering);
+
+  const url = `${BASE_URL}/api/v1.0/customers/exclusive/?${params.toString()}`;
+  console.log("🌟 Exclusive Products URL:", url);
+
+  try {
+    const res = await fetch(url);
+    console.log("📊 Exclusive Products Status:", res.status);
+
+    if (!res.ok) {
+      console.log("❌ Exclusive Products API Failed:", res.status);
+      return { results: [], count: 0, pages: 0 };
+    }
+
+    const json = await parseResponse(res);
+    let products = [];
+    let totalCount = 0;
+
+    // Backend wraps in { success: true, data: { count, results: [...] } }
+    if (json && json.data && json.data.results && Array.isArray(json.data.results)) {
+      products = json.data.results;
+      totalCount = json.data.count || products.length;
+    } else if (json && json.results && Array.isArray(json.results)) {
+      products = json.results;
+      totalCount = json.count || products.length;
+    } else if (json && json.data && Array.isArray(json.data)) {
+      products = json.data;
+      totalCount = json.count || products.length;
+    } else if (Array.isArray(json)) {
+      products = json;
+      totalCount = products.length;
+    }
+
+    const normalized = products.map(normalizeExclusiveProduct);
+    const totalPages = Math.ceil(totalCount / limit);
+    console.log(`✅ Exclusive: ${normalized.length} products, total: ${totalCount}`);
+    return { results: normalized, count: totalCount, pages: totalPages };
+  } catch (err) {
+    console.log("❌ Exclusive Products Error:", err.message);
+    return { results: [], count: 0, pages: 0 };
+  }
+}
+
+export async function getExclusiveProductById(id) {
+  const url = `${BASE_URL}/api/v1.0/customers/exclusive/${id}/`;
+  console.log("🌟 Exclusive Product Detail URL:", url);
+
+  try {
+    const res = await fetch(url);
+    console.log("📊 Exclusive Product Detail Status:", res.status);
+
+    if (!res.ok) return null;
+
+    const json = await parseResponse(res);
+    let product = null;
+    if (json && json.id) product = json;
+    else if (json && json.data && json.data.id) product = json.data;
+    return product ? normalizeExclusiveProduct(product) : null;
+  } catch (err) {
+    console.log("❌ Exclusive Product Detail Error:", err.message);
+    return null;
+  }
+}
+
+export async function getExclusiveCategories() {
+  const url = `${BASE_URL}/api/v1.0/customers/exclusive/categories/`;
+  console.log("🌟 Exclusive Categories URL:", url);
+
+  try {
+    const res = await fetch(url);
+    console.log("📊 Exclusive Categories Status:", res.status);
+
+    if (!res.ok) return [];
+
+    const json = await parseResponse(res);
+    if (Array.isArray(json)) return json;
+    if (json && json.results && Array.isArray(json.results)) return json.results;
+    if (json && json.data && Array.isArray(json.data)) return json.data;
+    return [];
+  } catch (err) {
+    console.log("❌ Exclusive Categories Error:", err.message);
+    return [];
+  }
+}
+
+export async function addDropshippingToCart(cartId, token, { productId, droplooImageId, size, color, unitPrice, quantity = 1 }) {
+  const url = `${BASE_URL}/api/v1.0/customers/carts/${cartId}/add-dropshipping/`;
+  console.log("🌟 Add Dropshipping to Cart URL:", url);
+
+  try {
+    const headers = getHeaders(token, true);
+    const body = {
+      product_id: productId,
+      droploo_image_id: droplooImageId,
+      size: size || '',
+      color: color || '',
+      unit_price: unitPrice,
+      quantity,
+    };
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+
+    console.log("📊 Add Dropshipping Status:", res.status);
+
+    if (!res.ok) {
+      const errorData = await parseResponse(res);
+      console.log("❌ Add Dropshipping Failed:", errorData);
+      return { success: false, error: 'Failed to add item' };
+    }
+
+    const json = await parseResponse(res);
+    console.log("✅ Add Dropshipping Success:", JSON.stringify(json).substring(0, 200));
+    return { success: true, data: json };
+  } catch (err) {
+    console.log("❌ Add Dropshipping Error:", err.message);
+    return { success: false, error: err.message };
+  }
+}
+
+export async function removeDropshippingFromCart(cartId, token, itemId) {
+  const url = `${BASE_URL}/api/v1.0/customers/carts/${cartId}/remove-dropshipping/${itemId}/`;
+  console.log("🌟 Remove Dropshipping URL:", url);
+
+  try {
+    const headers = getHeaders(token, true);
+    const res = await fetch(url, { method: 'DELETE', headers });
+
+    console.log("📊 Remove Dropshipping Status:", res.status);
+
+    if (!res.ok) {
+      const errorData = await parseResponse(res);
+      console.log("❌ Remove Dropshipping Failed:", errorData);
+      return { success: false, error: 'Failed to remove item' };
+    }
+
+    console.log("✅ Dropshipping item removed");
+    return { success: true };
+  } catch (err) {
+    console.log("❌ Remove Dropshipping Error:", err.message);
+    return { success: false, error: err.message };
   }
 }
 

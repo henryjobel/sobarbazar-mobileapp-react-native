@@ -4,13 +4,14 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 
 interface Store {
-  id: number;
+  id: number | string;
   name: string;
   logo?: string;
   description?: string;
   address?: string;
   phone_number?: string;
   is_active?: boolean;
+  isExclusive?: boolean;
 }
 
 interface VendorsProps {
@@ -43,15 +44,38 @@ export default function Vendors({ stores }: VendorsProps) {
   const router = useRouter();
   const [followed, setFollowed] = useState<Record<number, boolean>>({});
 
+  // RAKAMARI exclusive fake store (frontend pattern: insert in middle)
+  const rakamariStore: Store = {
+    id: 'rokomari',
+    name: 'RAKAMARI',
+    logo: 'https://api.hetdcl.com/static/images/rakamari-logo.png',
+    description: 'Exclusive Online Store',
+    isExclusive: true,
+  };
+
   // Use API stores if available, otherwise use fallback
-  const displayStores = stores && stores.length > 0 ? stores : fallbackStores;
+  const apiStores = stores && stores.length > 0 ? stores : fallbackStores;
+
+  // Insert RAKAMARI in the middle (same as frontend TopVendorsOne pattern)
+  const hasRakamari = apiStores.some(s => s.name?.toLowerCase().includes('rakamari'));
+  let displayStores: Store[];
+  if (!hasRakamari) {
+    const mid = Math.floor(apiStores.length / 2);
+    displayStores = [...apiStores.slice(0, mid), rakamariStore, ...apiStores.slice(mid)];
+  } else {
+    displayStores = apiStores;
+  }
 
   const toggleFollow = (id: number) => {
     setFollowed((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
   const visitShop = (store: Store) => {
-    router.push(`/screens/store/${store.id}`);
+    if (store.isExclusive) {
+      router.push('/screens/rakamari');
+    } else {
+      router.push(`/screens/store/${store.id}`);
+    }
   };
 
   const handleViewAll = () => {
@@ -76,7 +100,13 @@ export default function Vendors({ stores }: VendorsProps) {
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.scroll}>
         {displayStores.map((store) => (
-          <View key={store.id} style={styles.card}>
+          <View key={store.id.toString()} style={[styles.card, store.isExclusive && styles.exclusiveCard]}>
+            {/* RAKAMARI badge */}
+            {store.isExclusive && (
+              <View style={styles.exclusiveLabelRow}>
+                <Text style={styles.exclusiveLabel}>⭐ EXCLUSIVE</Text>
+              </View>
+            )}
             {/* Logo */}
             <View style={styles.logoContainer}>
               <Image
@@ -87,7 +117,7 @@ export default function Vendors({ stores }: VendorsProps) {
             </View>
 
             {/* Shop Name */}
-            <Text style={styles.shopName} numberOfLines={1}>
+            <Text style={[styles.shopName, store.isExclusive && styles.exclusiveShopName]} numberOfLines={1}>
               {store.name}
             </Text>
 
@@ -98,17 +128,24 @@ export default function Vendors({ stores }: VendorsProps) {
 
             {/* Buttons */}
             <View style={styles.buttonRow}>
-              <TouchableOpacity
-                style={[styles.followButton, followed[store.id] ? styles.following : styles.follow]}
-                onPress={() => toggleFollow(store.id)}
-              >
-                <Text style={[styles.followText, followed[store.id] && { color: '#299e60' }]}>
-                  {followed[store.id] ? 'Following' : 'Follow'}
-                </Text>
-              </TouchableOpacity>
+              {!store.isExclusive && (
+                <TouchableOpacity
+                  style={[styles.followButton, followed[store.id] ? styles.following : styles.follow]}
+                  onPress={() => toggleFollow(store.id as number)}
+                >
+                  <Text style={[styles.followText, followed[store.id] && { color: '#299e60' }]}>
+                    {followed[store.id] ? 'Following' : 'Follow'}
+                  </Text>
+                </TouchableOpacity>
+              )}
 
-              <TouchableOpacity style={styles.visitButton} onPress={() => visitShop(store)}>
-                <Text style={styles.visitText}>Visit Shop</Text>
+              <TouchableOpacity
+                style={[styles.visitButton, store.isExclusive && styles.exclusiveVisitButton]}
+                onPress={() => visitShop(store)}
+              >
+                <Text style={[styles.visitText, store.isExclusive && styles.exclusiveVisitText]}>
+                  {store.isExclusive ? 'Explore' : 'Visit Shop'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -221,6 +258,34 @@ const styles = StyleSheet.create({
   visitText: {
     color: '#299e60',
     fontWeight: '600',
+    fontSize: 12,
+  },
+  exclusiveCard: {
+    backgroundColor: '#fffbeb',
+    borderWidth: 2,
+    borderColor: '#f59e0b',
+  },
+  exclusiveLabelRow: {
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  exclusiveLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#92400e',
+    letterSpacing: 0.5,
+  },
+  exclusiveShopName: {
+    color: '#92400e',
+  },
+  exclusiveVisitButton: {
+    flex: 1,
+    backgroundColor: '#f59e0b',
+    borderColor: '#f59e0b',
+  },
+  exclusiveVisitText: {
+    color: '#fff',
+    fontWeight: '700',
     fontSize: 12,
   },
 });

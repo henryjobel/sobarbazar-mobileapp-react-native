@@ -6,6 +6,7 @@ import FlashSaleSection from '@/components/home/FlashSaleSection';
 import Header from '@/components/home/header';
 import NewArrivalsSection from '@/components/home/NewArrivalsSection';
 import Product from '@/components/home/Products';
+import RakamariSection from '@/components/home/RakamariSection';
 import SubHeader from '@/components/home/SubHeader';
 import Vendors from '@/components/home/vendors';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -13,7 +14,7 @@ import { ActivityIndicator, RefreshControl, ScrollView, StatusBar, View, Text, T
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getHomePageData } from '../../utils/api';
+import { getHomePageData, getExclusiveCategories } from '../../utils/api';
 
 interface HomeData {
   banner_sections?: any[];
@@ -30,14 +31,23 @@ export default function HomeScreen() {
   const [homeData, setHomeData] = useState<HomeData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [exclusiveCategories, setExclusiveCategories] = useState<any[]>([]);
 
   const fetchHomeData = useCallback(async () => {
     try {
-      const response = await getHomePageData();
-      if (response?.success && response?.data) {
-        setHomeData(response.data);
-      } else if (response?.data) {
-        setHomeData(response.data);
+      const [homeResponse, exclusiveCats] = await Promise.all([
+        getHomePageData(),
+        getExclusiveCategories().catch(() => []),
+      ]);
+      if (homeResponse?.success && homeResponse?.data) {
+        setHomeData(homeResponse.data);
+      } else if (homeResponse?.data) {
+        setHomeData(homeResponse.data);
+      }
+      if (Array.isArray(exclusiveCats)) {
+        setExclusiveCategories(exclusiveCats);
+      } else if (exclusiveCats?.results) {
+        setExclusiveCategories(exclusiveCats.results);
       }
     } catch (error) {
       console.error('Error fetching home data:', error);
@@ -128,7 +138,7 @@ export default function HomeScreen() {
         <BigSaleBannerr banners={bannerMap?.HeroBanner?.banner_items} />
 
         {/* Categories */}
-        <Category categories={homeData?.subcategories || homeData?.categories} />
+        <Category categories={homeData?.subcategories || homeData?.categories} exclusiveCategories={exclusiveCategories} />
 
         {/* Flash Sale Section */}
         <FlashSaleSection
@@ -136,6 +146,9 @@ export default function HomeScreen() {
           allProducts={homeData?.recommended_products}
           bannerSection={bannerMap?.FlashSales}
         />
+
+        {/* RAKAMARI Exclusive Section */}
+        <RakamariSection />
 
         {/* Special Deals Section */}
         <DealsSection />

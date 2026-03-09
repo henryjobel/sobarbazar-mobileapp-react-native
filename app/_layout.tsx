@@ -105,6 +105,16 @@ export default function RootLayout() {
             }}
           />
 
+          {/* RAKAMARI / Exclusive Routes */}
+          <Stack.Screen
+            name="screens/rakamari"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="screens/exclusive/[id]"
+            options={{ headerShown: false }}
+          />
+
           {/* Account Routes */}
           <Stack.Screen name="(routes)/my-orders" options={{ headerShown: false }} />
           <Stack.Screen name="(routes)/address" options={{ headerShown: false }} />

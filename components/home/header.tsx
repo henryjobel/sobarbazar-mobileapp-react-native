@@ -1,9 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React from 'react';
 import { Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Image } from 'expo-image';
+import { useCart } from '@/context/CartContext';
 
 export default function Header() {
+  const router = useRouter();
+  const { itemCount } = useCart();
+
   return (
     <View
       className="flex-row items-center justify-between px-4 py-3"
@@ -46,6 +51,41 @@ export default function Header() {
         }}
       >
         <Ionicons name='notifications-outline' size={22} color="#299e60"/>
+      </TouchableOpacity>
+
+      {/* Cart icon with badge */}
+      <TouchableOpacity
+        onPress={() => router.push('/(tabs)/cart')}
+        className="p-2 bg-white rounded-full border border-[#299e60] ml-2"
+        style={{
+          shadowColor: '#299e60',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+          elevation: 3,
+        }}
+      >
+        <Ionicons name='cart-outline' size={22} color="#299e60" />
+        {itemCount > 0 && (
+          <View style={{
+            position: 'absolute',
+            top: -4,
+            right: -4,
+            backgroundColor: '#EF4444',
+            borderRadius: 10,
+            minWidth: 18,
+            height: 18,
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingHorizontal: 3,
+            borderWidth: 1.5,
+            borderColor: '#fff',
+          }}>
+            <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>
+              {itemCount > 99 ? '99+' : itemCount}
+            </Text>
+          </View>
+        )}
       </TouchableOpacity>
     </View>
   );

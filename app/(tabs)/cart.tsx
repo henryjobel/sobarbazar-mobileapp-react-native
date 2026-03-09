@@ -28,6 +28,8 @@ export default function CartPage() {
     clearCart,
     refreshCart,
     setShippingArea,
+    dropshippingItems,
+    removeDropshippingItem,
   } = useCart();
 
   // Refresh cart on mount
@@ -276,7 +278,7 @@ export default function CartPage() {
     </View>
   );
 
-  if (isLoading && cartItems.length === 0) {
+  if (isLoading && itemCount === 0) {
     return (
       <SafeAreaView className="flex-1 bg-gray-50 items-center justify-center">
         <ActivityIndicator size="large" color="#299e60" />
@@ -295,7 +297,7 @@ export default function CartPage() {
             {itemCount} {itemCount === 1 ? "item" : "items"}
           </Text>
         </View>
-        {cartItems.length > 0 && (
+        {itemCount > 0 && (
           <TouchableOpacity
             className="bg-red-50 px-4 py-2 rounded-xl"
             onPress={clearCart}
@@ -306,7 +308,7 @@ export default function CartPage() {
         )}
       </View>
 
-      {cartItems.length === 0 ? (
+      {itemCount === 0 ? (
         renderEmptyCart()
       ) : (
         <>
@@ -324,6 +326,61 @@ export default function CartPage() {
             }
           >
             {cartItems.map((item, index) => renderCartItem(item, index))}
+
+            {/* RAKAMARI / Dropshipping Items */}
+            {dropshippingItems && dropshippingItems.length > 0 && (
+              <View className="mx-4 mt-4">
+                <View className="flex-row items-center mb-3">
+                  <View className="bg-amber-500 px-3 py-1 rounded-full">
+                    <Text className="text-white font-bold text-sm">RAKAMARI</Text>
+                  </View>
+                  <Text className="ml-2 text-gray-600 font-medium">Exclusive Items</Text>
+                </View>
+                {dropshippingItems.map((item: any) => (
+                  <View
+                    key={item.id || item.droploo_product_id}
+                    className="bg-white rounded-2xl p-4 mb-3 shadow-sm border border-amber-200"
+                  >
+                    <View className="flex-row">
+                      <Image
+                        source={{ uri: item.image || 'https://via.placeholder.com/80/f59e0b/FFFFFF?text=R' }}
+                        style={{ width: 80, height: 80, borderRadius: 10 }}
+                        contentFit="cover"
+                      />
+                      <View className="flex-1 ml-3">
+                        <Text className="text-gray-800 font-semibold text-sm" numberOfLines={2}>
+                          {item.name || 'RAKAMARI Product'}
+                        </Text>
+                        {(item.color || item.size) ? (
+                          <View className="flex-row flex-wrap gap-1 mt-1">
+                            {item.color ? (
+                              <View className="bg-gray-100 px-2 py-0.5 rounded-full">
+                                <Text className="text-gray-600 text-xs">{item.color}</Text>
+                              </View>
+                            ) : null}
+                            {item.size ? (
+                              <View className="bg-gray-100 px-2 py-0.5 rounded-full">
+                                <Text className="text-gray-600 text-xs">{item.size}</Text>
+                              </View>
+                            ) : null}
+                          </View>
+                        ) : null}
+                        <Text className="text-amber-600 font-bold mt-1">
+                          ৳{((item.unit_price || 0) * (item.quantity || 1)).toLocaleString()}
+                        </Text>
+                        <Text className="text-gray-400 text-xs">৳{item.unit_price} × {item.quantity}</Text>
+                      </View>
+                      <TouchableOpacity
+                        className="w-8 h-8 bg-red-50 rounded-full items-center justify-center"
+                        onPress={() => removeDropshippingItem && removeDropshippingItem(item.id)}
+                      >
+                        <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
 
             {/* Delivery Area Selection */}
             <View className="mx-4 mt-4 bg-white p-4 rounded-2xl">
@@ -397,6 +454,15 @@ export default function CartPage() {
                 </View>
               )}
 
+              {dropshippingItems.length > 0 && (
+                <View className="flex-row justify-between">
+                  <Text className="text-gray-500">Rakamari Items</Text>
+                  <Text className="text-amber-600 font-medium">
+                    {formatPrice(dropshippingItems.reduce((s, i) => s + (i.unit_price * i.quantity), 0))}
+                  </Text>
+                </View>
+              )}
+
               <View className="flex-row justify-between">
                 <Text className="text-gray-500">Delivery ({shippingArea === "IN" ? "Inside Dhaka" : "Outside Dhaka"})</Text>
                 <Text className="text-gray-800 font-medium">
@@ -420,7 +486,7 @@ export default function CartPage() {
                 isLoading ? "bg-main-400" : "bg-main-600"
               }`}
               onPress={handleCheckout}
-              disabled={isLoading || cartItems.length === 0}
+              disabled={isLoading || itemCount === 0}
             >
               {isLoading ? (
                 <ActivityIndicator size="small" color="#fff" />
