@@ -5,8 +5,6 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
-  FlatList,
-  RefreshControl,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -120,33 +118,33 @@ const Products = ({ recommendedProducts }: ProductsProps) => {
   const fetchProductsDirectly = async (pageNum = 1) => {
     try {
       const url = `https://api.hetdcl.com/api/v1.0/customers/products/?pagination=1&page=${pageNum}&page_size=20`;
-      console.log("🚀 Direct fetch from:", url);
+      __DEV__ && __DEV__ && console.log("🚀 Direct fetch from:", url);
       
       const response = await fetch(url);
-      console.log("📊 Response status:", response.status);
+      __DEV__ && __DEV__ && console.log("📊 Response status:", response.status);
       
       if (!response.ok) {
-        console.log("❌ Fetch failed with status:", response.status);
+        __DEV__ && __DEV__ && console.log("❌ Fetch failed with status:", response.status);
         return [];
       }
       
       const text = await response.text();
-      console.log("📦 Full response received, length:", text.length);
+      __DEV__ && __DEV__ && console.log("📦 Full response received, length:", text.length);
       
       const json = JSON.parse(text);
-      console.log("✅ JSON parsed successfully");
-      console.log("📊 JSON keys:", Object.keys(json));
-      console.log("📊 Has success:", json.success);
-      console.log("📊 Has data:", !!json.data);
+      __DEV__ && __DEV__ && console.log("✅ JSON parsed successfully");
+      __DEV__ && __DEV__ && console.log("📊 JSON keys:", Object.keys(json));
+      __DEV__ && __DEV__ && console.log("📊 Has success:", json.success);
+      __DEV__ && __DEV__ && console.log("📊 Has data:", !!json.data);
       
       // Structure: {success: true, message: "Status OK", data: {count: 12, next: null, previous: null, results: [...]}}
       if (json.success && json.data && json.data.results && Array.isArray(json.data.results)) {
-        console.log(`🎉 Found ${json.data.results.length} products in data.results`);
+        __DEV__ && __DEV__ && console.log(`🎉 Found ${json.data.results.length} products in data.results`);
         
         // Show first product details for debugging
         if (json.data.results.length > 0) {
           const firstProduct = json.data.results[0];
-          console.log("🔍 First product details:", {
+          __DEV__ && __DEV__ && console.log("🔍 First product details:", {
             id: firstProduct.id,
             name: firstProduct.name,
             price: firstProduct.price,
@@ -158,12 +156,12 @@ const Products = ({ recommendedProducts }: ProductsProps) => {
         
         return json.data.results;
       } else {
-        console.log("⚠️ Unexpected structure");
-        console.log("📊 Full response:", JSON.stringify(json, null, 2));
+        __DEV__ && __DEV__ && console.log("⚠️ Unexpected structure");
+        __DEV__ && __DEV__ && console.log("📊 Full response:", JSON.stringify(json, null, 2));
         return [];
       }
     } catch (error) {
-      console.log("❌ Fetch error:", error);
+      __DEV__ && __DEV__ && console.log("❌ Fetch error:", error);
       return [];
     }
   };
@@ -177,7 +175,7 @@ const Products = ({ recommendedProducts }: ProductsProps) => {
         if (pageNum === 1) setLoading(true);
       }
 
-      console.log(`🔄 Loading page ${pageNum}...`);
+      __DEV__ && __DEV__ && console.log(`🔄 Loading page ${pageNum}...`);
       
       // Fetch regular products + exclusive on first page
       const [data, exclusiveData] = await Promise.all([
@@ -185,7 +183,7 @@ const Products = ({ recommendedProducts }: ProductsProps) => {
         pageNum === 1 ? getExclusiveProducts(1, 20).catch(() => ({ results: [] })) : Promise.resolve(null),
       ]);
 
-      console.log(`📊 Received ${data?.length || 0} products`);
+      __DEV__ && __DEV__ && console.log(`📊 Received ${data?.length || 0} products`);
       
       if (data && Array.isArray(data) && data.length > 0) {
         const transformedData = data.map((item: any) => ({
@@ -228,6 +226,8 @@ const Products = ({ recommendedProducts }: ProductsProps) => {
   // Initial load
   useEffect(() => {
     loadProducts(1);
+    // Load the first page once; pagination and refresh call loadProducts explicitly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Load more products
@@ -248,7 +248,7 @@ const Products = ({ recommendedProducts }: ProductsProps) => {
 
   // Handle product press - use Expo Router
   const handleProductPress = (product: ProductType & { is_exclusive?: boolean; exclusive_id?: number }) => {
-    console.log("👉 Product pressed:", product.id, product.name);
+    __DEV__ && __DEV__ && console.log("👉 Product pressed:", product.id, product.name);
     if (product.is_exclusive) {
       const exclusiveId = product.exclusive_id || product.id;
       router.push(`/screens/exclusive/${exclusiveId}`);
@@ -262,7 +262,7 @@ const Products = ({ recommendedProducts }: ProductsProps) => {
     if (addingToCart === product.id) return; // Prevent double-tap
 
     setAddingToCart(product.id);
-    console.log('🛒 Adding to cart:', product.id, product.name);
+    __DEV__ && __DEV__ && console.log('🛒 Adding to cart:', product.id, product.name);
 
     try {
       const cartProduct = {
@@ -304,10 +304,10 @@ const Products = ({ recommendedProducts }: ProductsProps) => {
 
     if (isInWishlist(product.id)) {
       removeFromWishlist(product.id);
-      console.log('💔 Removed from wishlist:', product.id);
+      __DEV__ && __DEV__ && console.log('💔 Removed from wishlist:', product.id);
     } else {
       addToWishlist(productData);
-      console.log('❤️ Added to wishlist:', product.id);
+      __DEV__ && __DEV__ && console.log('❤️ Added to wishlist:', product.id);
     }
   };
 
@@ -613,32 +613,29 @@ const Products = ({ recommendedProducts }: ProductsProps) => {
       {(() => {
         const mixedList = buildMixedList(products, exclusives);
         return mixedList.length > 0 ? (
-          <FlatList
-            data={mixedList}
-            renderItem={renderProduct}
-            keyExtractor={(item: ListItem) => `${item._type}-${item.id}`}
-            numColumns={2}
-            columnWrapperStyle={styles.row}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                colors={['#4CAF50']}
-                tintColor="#4CAF50"
-              />
-            }
-            onEndReached={loadMore}
-            onEndReachedThreshold={0.5}
-            ListFooterComponent={
-              loading && products.length > 0 ? (
-                <View style={styles.footerContainer}>
-                  <ActivityIndicator size="small" color="#4CAF50" />
-                  <Text style={styles.footerText}>Loading more...</Text>
-                </View>
-              ) : null
-            }
-          />
+          <>
+            <View style={styles.productsGrid}>
+              {mixedList.map((item: ListItem) => (
+                <React.Fragment key={`${item._type}-${item.id}`}>
+                  {renderProduct({ item })}
+                </React.Fragment>
+              ))}
+            </View>
+
+            {loading && products.length > 0 ? (
+              <View style={styles.footerContainer}>
+                <ActivityIndicator size="small" color="#4CAF50" />
+                <Text style={styles.footerText}>Loading more...</Text>
+              </View>
+            ) : null}
+
+            {!loading && hasMore ? (
+              <TouchableOpacity style={styles.loadMoreButton} onPress={loadMore}>
+                <Ionicons name="add-circle-outline" size={18} color="#fff" />
+                <Text style={styles.loadMoreText}>Load More</Text>
+              </TouchableOpacity>
+            ) : null}
+          </>
         ) : (
           <View style={styles.emptyContainer}>
             <Ionicons name="cube-outline" size={64} color="#ccc" />
@@ -798,6 +795,11 @@ const styles = StyleSheet.create({
   row: {
     justifyContent: 'space-between',
   },
+  productsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
   centered: {
     justifyContent: 'center',
     alignItems: 'center',
@@ -816,6 +818,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     marginTop: 8,
+  },
+  loadMoreButton: {
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#4CAF50',
+    borderRadius: 999,
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+    marginTop: 10,
+    gap: 6,
+  },
+  loadMoreText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
   },
   emptyContainer: {
     alignItems: 'center',

@@ -18,14 +18,17 @@ import { getOrderById } from '../../../utils/api';
 
 interface OrderItem {
   id: number;
-  product: {
-    id: number;
-    name: string;
+  product?: {
+    id?: number;
+    name?: string;
+    image?: string;
+    feature_image?: string;
   };
   variant?: {
     id: number;
     name: string;
     sku: string;
+    value?: string;
     image?: string;
   };
   quantity: number;
@@ -58,6 +61,7 @@ interface Order {
   tracking_number?: string;
   estimated_delivery?: string;
   notes?: string;
+  payment_status?: string;
 }
 
 const STATUS_CONFIG: { [key: string]: any } = {
@@ -68,6 +72,16 @@ const STATUS_CONFIG: { [key: string]: any } = {
   Shipped: { color: '#8B5CF6', bg: '#EDE9FE', label: 'Shipped', icon: 'car-outline' },
   Delivered: { color: '#10B981', bg: '#D1FAE5', label: 'Delivered', icon: 'checkmark-circle-outline' },
   Cancelled: { color: '#EF4444', bg: '#FEE2E2', label: 'Cancelled', icon: 'close-circle-outline' },
+};
+
+const PAYMENT_STATUS_CONFIG: { [key: string]: { color: string; label: string } } = {
+  paid: { color: '#10B981', label: 'Paid' },
+  completed: { color: '#10B981', label: 'Paid' },
+  success: { color: '#10B981', label: 'Paid' },
+  pending: { color: '#F59E0B', label: 'Pending' },
+  unpaid: { color: '#F59E0B', label: 'Unpaid' },
+  failed: { color: '#EF4444', label: 'Failed' },
+  cancelled: { color: '#EF4444', label: 'Cancelled' },
 };
 
 const ORDER_TIMELINE = [
@@ -121,19 +135,14 @@ export default function OrderDetailScreen() {
     });
   };
 
-  const formatPrice = (price: number) => {
-    return `৳${price.toLocaleString()}`;
+  const formatPrice = (price?: number | string | null) => {
+    const numericPrice = Number(price || 0);
+    return `BDT ${numericPrice.toLocaleString()}`;
   };
 
   const getStatusIndex = (status: string) => {
     if (status === 'Cancelled') return -1;
     return ORDER_TIMELINE.findIndex(item => item.key === status);
-  };
-
-  const handleCall = () => {
-    // Phone number not available in order response
-    // If needed, contact customer support
-    console.log('Phone contact not available in order details');
   };
 
   const handleTrackOrder = () => {
@@ -186,7 +195,9 @@ export default function OrderDetailScreen() {
   }
 
   const statusConfig = STATUS_CONFIG[order.status] || STATUS_CONFIG.Placed;
-  const currentStatusIndex = getStatusIndex(order.status.toLowerCase());
+  const currentStatusIndex = getStatusIndex(order.status);
+  const paymentStatus = (order.payment_status || (order.payment_method === 'COD' ? 'pending' : 'paid')).toLowerCase();
+  const paymentConfig = PAYMENT_STATUS_CONFIG[paymentStatus] || PAYMENT_STATUS_CONFIG.pending;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -222,7 +233,7 @@ export default function OrderDetailScreen() {
           <Text style={styles.statusDate}>
             {order.status === 'Delivered' ? 'Delivered on' : 'Ordered on'}: {formatDate(order.order_date || order.created_at || '')}
           </Text>
-          {order.estimated_delivery && order.status !== 'delivered' && order.status !== 'cancelled' && (
+          {order.estimated_delivery && order.status !== 'Delivered' && order.status !== 'Cancelled' && (
             <Text style={styles.estimatedDelivery}>
               Estimated delivery: {formatDate(order.estimated_delivery)}
             </Text>
@@ -230,7 +241,7 @@ export default function OrderDetailScreen() {
         </View>
 
         {/* Order Timeline */}
-        {order.status !== 'cancelled' && (
+        {order.status !== 'Cancelled' && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Order Timeline</Text>
             <View style={styles.timeline}>
@@ -304,11 +315,15 @@ export default function OrderDetailScreen() {
             <TouchableOpacity
               key={item.id}
               style={styles.itemCard}
-              onPress={() => router.push(`/screens/product/${item.product?.id}`)}
+              onPress={() => {
+                if (item.product?.id) {
+                  router.push(`/screens/product/${item.product.id}`);
+                }
+              }}
               activeOpacity={0.7}
             >
               <Image
-                source={{ uri: item.product?.image || 'https://via.placeholder.com/80' }}
+                source={{ uri: item.product_image || item.variant?.image || item.product?.image || item.product?.feature_image || 'https://via.placeholder.com/80' }}
                 style={styles.itemImage}
                 contentFit="cover"
               />
@@ -318,16 +333,16 @@ export default function OrderDetailScreen() {
                 </Text>
                 {item.variant && (
                   <Text style={styles.itemVariant}>
-                    {item.variant.name}: {item.variant.value}
+                    {item.variant.name}: {item.variant.value || item.variant.sku}
                   </Text>
                 )}
                 <View style={styles.itemPriceRow}>
                   <Text style={styles.itemQuantity}>Qty: {item.quantity}</Text>
                   <Text style={styles.itemPrice}>
-                    {formatPrice(item.price)} × {item.quantity}
+                    {formatPrice(item.price ?? item.final_unit_price ?? item.net_price)} x {item.quantity}
                   </Text>
                 </View>
-                <Text style={styles.itemSubtotal}>{formatPrice(item.subtotal || item.price * item.quantity)}</Text>
+                <Text style={styles.itemSubtotal}>{formatPrice(item.subtotal ?? item.net_price ?? ((item.price ?? item.final_unit_price ?? 0) * item.quantity))}</Text>
               </View>
             </TouchableOpacity>
           ))}

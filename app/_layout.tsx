@@ -45,14 +45,6 @@ export default function RootLayout() {
             }}
           />
 
-          {/* Shop/Browse Screen */}
-          <Stack.Screen
-            name="screens/shop"
-            options={{
-              headerShown: false,
-            }}
-          />
-
           {/* All Categories Screen */}
           <Stack.Screen
             name="screens/categories"
@@ -127,20 +119,6 @@ export default function RootLayout() {
           <Stack.Screen name="(routes)/terms" options={{ headerShown: false }} />
 
           {/* Vendor Screens */}
-          <Stack.Screen
-            name="screens/vendors"
-            options={{
-              headerShown: true,
-              title: 'Vendors',
-              headerStyle: {
-                backgroundColor: '#ffffff',
-              },
-              headerTintColor: '#2c4341',
-              headerTitleStyle: {
-                fontWeight: '600',
-              },
-            }}
-          />
           <Stack.Screen
             name="screens/vendor-detail/[id]"
             options={{

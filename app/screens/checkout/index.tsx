@@ -18,6 +18,13 @@ import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
+import {
+  formatCartVariantAttributes,
+  getCartItemImage,
+  getCartItemName,
+  getCartItemTotalPrice,
+  getCartItemUnitPrice,
+} from '@/utils/cartItemDisplay';
 
 const API_BASE_URL = 'https://api.hetdcl.com';
 
@@ -42,7 +49,7 @@ interface ShippingAddress {
 
 export default function CheckoutScreen() {
   const router = useRouter();
-  const { user, isAuthenticated } = useAuth();
+  const { user } = useAuth();
   const {
     cart,
     checkout,
@@ -170,91 +177,6 @@ export default function CheckoutScreen() {
     }
   };
 
-  // ✅ FIXED: Get product image with multiple fallbacks
-  const getItemImage = (item: any): string => {
-    const imageUrl =
-      item.variant?.image ||
-      item.product_image ||
-      item.variant?.product_image ||
-      item.variant?.product?.image ||
-      item.image ||
-      null;
-
-    return imageUrl || 'https://via.placeholder.com/90/299e60/FFFFFF?text=Product';
-  };
-
-  // ✅ FIXED: Get product name with fallbacks
-  const getItemName = (item: any): string => {
-    return (
-      item.variant?.name ||
-      item.product_name ||
-      item.name ||
-      'Product'
-    );
-  };
-
-  const getItemPrice = (item: any): number => {
-    return item.variant?.final_price || item.variant?.price || item.discounted_price || 0;
-  };
-
-  // ✅ FIXED: Format variant attributes (handles Python dict format with single quotes)
-  const formatVariantAttributes = (attributes: any): string => {
-    if (!attributes) return '';
-
-    let result = '';
-
-    // If it's a string
-    if (typeof attributes === 'string') {
-      // Check if it looks like a Python dict or JSON
-      if (attributes.includes('{') && attributes.includes(':')) {
-        try {
-          // ✅ FIX: Convert Python dict format to JSON format
-          // Replace single quotes with double quotes
-          const jsonString = attributes
-            .replace(/'/g, '"')  // Replace single quotes with double quotes
-            .replace(/None/g, 'null')  // Replace Python None with null
-            .replace(/True/g, 'true')  // Replace Python True with true
-            .replace(/False/g, 'false');  // Replace Python False with false
-
-          const parsed = JSON.parse(jsonString);
-
-          if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-            // Convert to "Size: 41mm, Color: Midnight" format
-            result = Object.entries(parsed)
-              .filter(([_, value]) => value !== null && value !== undefined && value !== '')
-              .map(([key, value]) => `${key}: ${value}`)
-              .join(', ');
-          } else {
-            result = jsonString.replace(/[{}"\[\]]/g, '');
-          }
-        } catch (error) {
-          console.log('⚠️ Checkout - Parse error, cleaning string:', error);
-          // Failed to parse, clean it manually
-          result = attributes
-            .replace(/[{}'"\[\]]/g, '')  // Remove braces and quotes
-            .replace(/:/g, ': ')  // Add space after colons
-            .trim();
-        }
-      } else {
-        // Already a clean string
-        result = attributes;
-      }
-    }
-    // If it's already an object
-    else if (typeof attributes === 'object' && attributes !== null && !Array.isArray(attributes)) {
-      result = Object.entries(attributes)
-        .filter(([_, value]) => value !== null && value !== undefined && value !== '')
-        .map(([key, value]) => `${key}: ${value}`)
-        .join(', ');
-    }
-    // Fallback
-    else {
-      result = String(attributes).replace(/[{}'"\[\]]/g, '');
-    }
-
-    return result;
-  };
-
   if (totalItems === 0) {
     return (
       <SafeAreaView style={styles.emptyContainer}>
@@ -285,15 +207,16 @@ export default function CheckoutScreen() {
               <View key={item.id} style={styles.orderItem}>
                 <View style={styles.itemImageContainer}>
                   <Image
-                    source={{ uri: getItemImage(item) }}
+                    source={{ uri: getCartItemImage(item) }}
                     style={styles.itemImage}
                     contentFit="cover"
                   />
                 </View>
                 <View style={styles.itemInfo}>
-                  <Text style={styles.itemName} numberOfLines={2}>{getItemName(item)}</Text>
+                  <Text style={styles.itemName} numberOfLines={2}>{getCartItemName(item)}</Text>
                   {(() => {
-                    const variantText = formatVariantAttributes(item.variant?.attributes);
+                    const cartItem = item as any;
+                    const variantText = formatCartVariantAttributes(cartItem.variant?.attributes || cartItem.variant_attributes || cartItem.attributes);
                     return variantText ? (
                       <View style={styles.variantContainer}>
                         <Text style={styles.itemVariant}>{variantText}</Text>
@@ -302,11 +225,11 @@ export default function CheckoutScreen() {
                   })()}
                   <View style={styles.itemBottom}>
                     <View style={styles.priceContainer}>
-                      <Text style={styles.itemPrice}>৳{getItemPrice(item).toLocaleString()}</Text>
+                      <Text style={styles.itemPrice}>৳{getCartItemUnitPrice(item).toLocaleString()}</Text>
                       <Text style={styles.itemQty}>Qty: {item.quantity}</Text>
                     </View>
                     <View style={styles.totalBadge}>
-                      <Text style={styles.totalBadgeText}>৳{(getItemPrice(item) * item.quantity).toLocaleString()}</Text>
+                      <Text style={styles.totalBadgeText}>৳{getCartItemTotalPrice(item).toLocaleString()}</Text>
                     </View>
                   </View>
                 </View>
@@ -986,3 +909,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
+
+
+

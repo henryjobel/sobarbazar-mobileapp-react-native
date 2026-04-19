@@ -12,6 +12,13 @@ import {
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCart } from "../../context/CartContext";
+import {
+  formatCartVariantAttributes,
+  getCartItemImage,
+  getCartItemName,
+  getCartItemTotalPrice,
+  getCartItemUnitPrice,
+} from "@/utils/cartItemDisplay";
 
 export default function CartPage() {
   const router = useRouter();
@@ -35,12 +42,12 @@ export default function CartPage() {
   // Refresh cart on mount
   useEffect(() => {
     refreshCart();
-  }, []);
+  }, [refreshCart]);
 
   // Refresh cart every time the screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      console.log('🛒 Cart Page: Screen focused, refreshing cart...');
+      __DEV__ && __DEV__ && console.log('🛒 Cart Page: Screen focused, refreshing cart...');
       refreshCart();
     }, [refreshCart])
   );
@@ -75,108 +82,18 @@ export default function CartPage() {
 
   const formatPrice = (price: number) => `৳${(price || 0).toLocaleString()}`;
 
-  // ✅ FIXED: Get product image with multiple fallbacks
-  const getItemImage = (item: any): string => {
-    const imageUrl =
-      item.variant?.image ||
-      item.product_image ||
-      item.variant?.product_image ||
-      item.variant?.product?.image ||
-      item.image ||
-      null;
-
-    return imageUrl || "https://via.placeholder.com/120/299e60/FFFFFF?text=Product";
-  };
-
-  // ✅ FIXED: Get product name with fallbacks
-  const getItemName = (item: any): string => {
-    return (
-      item.variant?.name ||
-      item.product_name ||
-      item.name ||
-      "Product"
-    );
-  };
-
-  // ✅ Get product price
-  const getItemPrice = (item: any): number => {
-    return item.variant?.final_price || item.variant?.price || item.discounted_price || 0;
-  };
-
-  const getItemTotalPrice = (item: any): number => {
-    return item.total_price || item.discounted_price || (getItemPrice(item) * item.quantity);
-  };
-
-  // ✅ FIXED: Format variant attributes (handles Python dict format with single quotes)
-  const formatVariantAttributes = (attributes: any): string => {
-    if (!attributes) return '';
-
-    let result = '';
-
-    // If it's a string
-    if (typeof attributes === 'string') {
-      // Check if it looks like a Python dict or JSON
-      if (attributes.includes('{') && attributes.includes(':')) {
-        try {
-          // ✅ FIX: Convert Python dict format to JSON format
-          // Replace single quotes with double quotes
-          const jsonString = attributes
-            .replace(/'/g, '"')  // Replace single quotes with double quotes
-            .replace(/None/g, 'null')  // Replace Python None with null
-            .replace(/True/g, 'true')  // Replace Python True with true
-            .replace(/False/g, 'false');  // Replace Python False with false
-
-          const parsed = JSON.parse(jsonString);
-
-          if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-            // Convert to "Size: 41mm, Color: Midnight" format
-            result = Object.entries(parsed)
-              .filter(([_, value]) => value !== null && value !== undefined && value !== '')
-              .map(([key, value]) => `${key}: ${value}`)
-              .join(', ');
-          } else {
-            result = jsonString.replace(/[{}"\[\]]/g, '');
-          }
-        } catch (error) {
-          console.log('⚠️ Cart - Parse error, cleaning string:', error);
-          // Failed to parse, clean it manually
-          result = attributes
-            .replace(/[{}'"\[\]]/g, '')  // Remove braces and quotes
-            .replace(/:/g, ': ')  // Add space after colons
-            .trim();
-        }
-      } else {
-        // Already a clean string
-        result = attributes;
-      }
-    }
-    // If it's already an object
-    else if (typeof attributes === 'object' && attributes !== null && !Array.isArray(attributes)) {
-      result = Object.entries(attributes)
-        .filter(([_, value]) => value !== null && value !== undefined && value !== '')
-        .map(([key, value]) => `${key}: ${value}`)
-        .join(', ');
-    }
-    // Fallback
-    else {
-      result = String(attributes).replace(/[{}'"\[\]]/g, '');
-    }
-
-    return result;
-  };
-
   // ✅ FIXED: Modern cart item UI
   const renderCartItem = (item: any, index: number) => {
-    const variantText = formatVariantAttributes(item.variant?.attributes);
+    const variantText = formatCartVariantAttributes(item.variant?.attributes || item.variant_attributes || item.attributes);
 
     return (
       <View key={item.id} className="bg-white p-4 mx-4 mt-4 rounded-2xl shadow-sm border border-gray-100">
         <View className="flex-row">
           {/* ✅ Product Image - Left Side */}
-          <View className="shadow-md rounded-xl">
+          <View style={{ width: 96, height: 96, borderRadius: 12, overflow: "hidden", backgroundColor: "#F3F4F6" }}>
             <Image
-              source={{ uri: getItemImage(item) }}
-              className="w-24 h-24 rounded-xl bg-gray-100"
+              source={{ uri: getCartItemImage(item) }}
+              style={{ width: 96, height: 96, borderRadius: 12, backgroundColor: "#F3F4F6" }}
               contentFit="cover"
               placeholder={require('@/assets/images/icon.png')}
             />
@@ -187,7 +104,7 @@ export default function CartPage() {
             <View>
               {/* Product Name */}
               <Text className="text-base font-semibold text-gray-800 leading-5" numberOfLines={2}>
-                {getItemName(item)}
+                {getCartItemName(item)}
               </Text>
 
               {/* ✅ Variant - Clean Text (NO raw JSON) */}
@@ -203,7 +120,7 @@ export default function CartPage() {
             {/* Price */}
             <View>
               <Text className="text-lg font-bold text-main-700 mt-2">
-                {formatPrice(getItemPrice(item))}
+                {formatPrice(getCartItemUnitPrice(item))}
               </Text>
               <Text className="text-xs text-gray-500 mt-0.5">per unit</Text>
             </View>
@@ -250,7 +167,7 @@ export default function CartPage() {
           {/* Total Price Badge */}
           <View className="bg-main-600 px-4 py-2 rounded-lg">
             <Text className="text-white font-bold text-base">
-              {formatPrice(getItemTotalPrice(item))}
+              {formatPrice(getCartItemTotalPrice(item))}
             </Text>
           </View>
         </View>
@@ -515,3 +432,6 @@ export default function CartPage() {
     </SafeAreaView>
   );
 }
+
+
+

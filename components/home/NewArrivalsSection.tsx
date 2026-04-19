@@ -254,12 +254,12 @@ export default function NewArrivalsSection({
                   {product.name}
                 </Text>
 
-                {product.rating && (
+                {(product.rating ?? 0) > 0 ? (
                   <View className="flex-row items-center mt-1">
                     <Ionicons name="star" size={12} color="#FBBF24" />
-                    <Text className="text-gray-500 text-xs ml-1">{product.rating.toFixed(1)}</Text>
+                    <Text className="text-gray-500 text-xs ml-1">{product.rating?.toFixed(1)}</Text>
                   </View>
-                )}
+                ) : null}
 
                 <View className="flex-row items-center mt-2">
                   <Text className="text-blue-600 font-bold text-base">{formatPrice(price)}</Text>

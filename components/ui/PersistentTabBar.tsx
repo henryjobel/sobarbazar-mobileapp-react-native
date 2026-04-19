@@ -6,6 +6,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCart } from '@/context/CartContext';
 import { useWishlist } from '@/context/WishlistContext';
 
+type TabConfig = {
+  name: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  activeIcon: keyof typeof Ionicons.glyphMap;
+  path: string;
+  isCenter?: boolean;
+  badge?: number;
+};
+
 export default function PersistentTabBar() {
   const router = useRouter();
   const pathname = usePathname();
@@ -13,9 +22,9 @@ export default function PersistentTabBar() {
   const { itemCount: cartCount } = useCart();
   const { itemCount: wishlistCount } = useWishlist();
 
-  const tabs = [
+  const tabs: TabConfig[] = [
     { name: 'Home', icon: 'home-outline', activeIcon: 'home', path: '/(tabs)' },
-    { name: 'Shop', icon: 'grid-outline', activeIcon: 'grid', path: '/(tabs)/categories' },
+    { name: 'Shop', icon: 'storefront-outline', activeIcon: 'storefront', path: '/(tabs)/shop' },
     { name: 'Cart', icon: 'cart-outline', activeIcon: 'cart', path: '/(tabs)/cart', isCenter: true, badge: cartCount },
     { name: 'Wishlist', icon: 'heart-outline', activeIcon: 'heart', path: '/(tabs)/wishlist', badge: wishlistCount },
     { name: 'Profile', icon: 'person-outline', activeIcon: 'person', path: '/(tabs)/profile' },

@@ -48,7 +48,7 @@ export default function OrderFailedScreen() {
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+  }, [fadeAnim, scaleAnim, shakeAnim]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -263,3 +263,4 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
 });
+

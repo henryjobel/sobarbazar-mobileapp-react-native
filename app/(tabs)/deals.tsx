@@ -109,7 +109,7 @@ export default function Deals() {
     return () => clearInterval(interval);
   }, []);
 
-  const renderProduct = (item) => (
+  const renderProduct = (item: (typeof flashSales)[number]) => (
     <View key={item.id} style={styles.productCard}>
       <Image source={{ uri: item.image }} style={styles.productImage} />
 

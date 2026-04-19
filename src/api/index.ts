@@ -13,17 +13,3 @@ export * from './auth';
 // Export Products API
 export * from './products';
 
-// Re-export types for convenience
-export type {
-  AuthTokens,
-  User,
-  LoginCredentials,
-  RegisterData,
-} from './auth';
-
-export type {
-  Product,
-  ProductVariant,
-  ProductsResponse,
-  ProductFilters,
-} from './products';

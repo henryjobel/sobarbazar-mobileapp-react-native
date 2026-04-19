@@ -1,16 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import {
   Animated,
-  Dimensions,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
-
-const { width } = Dimensions.get('window');
 
 interface CartToastProps {
   visible: boolean;
@@ -27,6 +24,23 @@ export default function CartToast({ visible, onHide, product, itemCount = 0 }: C
   const router = useRouter();
   const slideAnim = useRef(new Animated.Value(-200)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  const hideToast = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: -200,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      onHide();
+    });
+  }, [onHide, opacityAnim, slideAnim]);
 
   useEffect(() => {
     if (visible) {
@@ -52,24 +66,7 @@ export default function CartToast({ visible, onHide, product, itemCount = 0 }: C
 
       return () => clearTimeout(timer);
     }
-  }, [visible]);
-
-  const hideToast = () => {
-    Animated.parallel([
-      Animated.timing(slideAnim, {
-        toValue: -200,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.timing(opacityAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      onHide();
-    });
-  };
+  }, [hideToast, opacityAnim, slideAnim, visible]);
 
   const handleViewCart = () => {
     hideToast();
@@ -148,3 +145,4 @@ export default function CartToast({ visible, onHide, product, itemCount = 0 }: C
     </Animated.View>
   );
 }
+

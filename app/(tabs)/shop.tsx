@@ -6,9 +6,7 @@ import {
   ActivityIndicator,
   Dimensions,
   FlatList,
-  Modal,
-  Platform,
-  RefreshControl,
+  Modal,  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -165,7 +163,7 @@ export default function ShopScreen() {
   const fetchExclusiveProducts = useCallback(async () => {
     if (!shouldIncludeExclusive) { setExclusiveProducts([]); return; }
     try {
-      const data = await getExclusiveProducts(1, 20, null, searchText || null);
+      const data = await getExclusiveProducts(1, 20, null, (searchText || null) as any);
       setExclusiveProducts(data.results || []);
     } catch {
       setExclusiveProducts([]);
@@ -198,19 +196,19 @@ export default function ShopScreen() {
       params.push(`page=${page}`);
 
       const url = `${BASE_URL}/api/v1.0/customers/products/?${params.join('&')}`;
-      console.log('🛍️ Shop API URL:', url);
+      __DEV__ && __DEV__ && console.log('🛍️ Shop API URL:', url);
 
       const res = await fetch(url);
-      console.log('📊 Shop API Status:', res.status);
+      __DEV__ && __DEV__ && console.log('📊 Shop API Status:', res.status);
 
       if (!res.ok) {
-        console.log('❌ Shop API failed');
+        __DEV__ && __DEV__ && console.log('❌ Shop API failed');
         setProducts([]);
         return;
       }
 
       const json = await res.json();
-      console.log('🛍️ Shop API Response Keys:', Object.keys(json));
+      __DEV__ && __DEV__ && console.log('🛍️ Shop API Response Keys:', Object.keys(json));
 
       // Extract products from response (matches frontend logic)
       let productsData: Product[] = [];
@@ -230,7 +228,7 @@ export default function ShopScreen() {
         count = productsData.length;
       }
 
-      console.log(`✅ Got ${productsData.length} products, total: ${count}`);
+      __DEV__ && __DEV__ && console.log(`✅ Got ${productsData.length} products, total: ${count}`);
 
       if (reset || page === 1) {
         setProducts(productsData);
@@ -316,12 +314,16 @@ export default function ShopScreen() {
     fetchBrands();
     fetchFilterOptions();
     fetchExclusiveProducts();
+    // Run once on screen mount; filter changes are handled by the next effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Refetch when filters change
   useEffect(() => {
     fetchProducts(1, true);
     fetchExclusiveProducts();
+    // Keep this scoped to filter controls so typing in search does not refetch on every keypress.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCategory, selectedBrand, selectedStore, selectedRating, sortBy]);
 
   // Fetch store data when store filter changes
@@ -331,12 +333,14 @@ export default function ShopScreen() {
     } else {
       setStoreData(null);
     }
+    // fetchStoreData is stable for current usage; only selected store should trigger this effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedStore]);
 
   // Add to cart handler
   const handleAddToCart = async (product: Product) => {
     if (!product.default_variant?.id) {
-      console.log('No variant available');
+      __DEV__ && __DEV__ && console.log('No variant available');
       return;
     }
 
@@ -344,7 +348,7 @@ export default function ShopScreen() {
     try {
       const success = await addItem(product, 1, product.default_variant);
       if (success) {
-        console.log('✅ Added to cart');
+        __DEV__ && __DEV__ && console.log('✅ Added to cart');
       }
     } catch (error) {
       console.error('Add to cart error:', error);
@@ -1805,3 +1809,4 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 });
+

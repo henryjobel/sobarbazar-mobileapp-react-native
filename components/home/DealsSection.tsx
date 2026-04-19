@@ -10,7 +10,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Image } from 'expo-image';
 
 const { width } = Dimensions.get('window');
 
@@ -19,7 +18,7 @@ interface Deal {
   title: string;
   subtitle: string;
   discount: string;
-  gradient: string[];
+  gradient: readonly [string, string, ...string[]];
   icon: keyof typeof Ionicons.glyphMap;
   route?: string;
 }
@@ -398,3 +397,4 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 });
+

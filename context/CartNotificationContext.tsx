@@ -24,7 +24,7 @@ export function CartNotificationProvider({ children }: { children: ReactNode }) 
   const [slideAnim] = useState(new Animated.Value(-200));
   const [opacityAnim] = useState(new Animated.Value(0));
   const navigateToCartRef = useRef<(() => void) | null>(null);
-  const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const setNavigateToCart = useCallback((navigate: () => void) => {
     navigateToCartRef.current = navigate;
@@ -248,7 +248,7 @@ export function useCartNotification() {
   // Return a safe fallback if context is not available
   // This prevents errors when component is used outside provider
   if (context === undefined) {
-    console.warn('useCartNotification: Context not available, using fallback');
+    __DEV__ && console.warn('useCartNotification: Context not available, using fallback');
     return {
       showNotification: () => {},
       hideNotification: () => {},

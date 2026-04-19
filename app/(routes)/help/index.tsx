@@ -1,9 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import {
-  Animated,
-  LayoutAnimation,
+import {  LayoutAnimation,
   Platform,
   ScrollView,
   StyleSheet,
@@ -269,7 +267,7 @@ export default function HelpScreen() {
           <View style={styles.quickLinksGrid}>
             <TouchableOpacity
               style={styles.quickLinkItem}
-              onPress={() => router.push('/(routes)/my-oders')}
+              onPress={() => router.push('/(routes)/my-orders')}
             >
               <View style={[styles.quickLinkIcon, { backgroundColor: '#DBEAFE' }]}>
                 <Ionicons name="cube-outline" size={20} color="#3B82F6" />
@@ -608,3 +606,5 @@ const styles = StyleSheet.create({
     height: 32,
   },
 });
+
+

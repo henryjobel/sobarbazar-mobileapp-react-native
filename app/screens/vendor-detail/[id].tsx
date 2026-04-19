@@ -1,4 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -7,24 +9,26 @@ import {
   FlatList,
   RefreshControl,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Image } from 'expo-image';
-import { getStoreById, getStoreProducts } from '../../../utils/api';
 import { useCart } from '../../../context/CartContext';
 import { useWishlist } from '../../../context/WishlistContext';
+import { getStoreById, getStoreProducts } from '../../../utils/api';
+import { formatHtmlText } from '@/utils/htmlText';
 
 const { width } = Dimensions.get('window');
 const PRODUCT_CARD_WIDTH = (width - 48) / 2;
+const API_BASE_URL = 'https://api.hetdcl.com';
 
 interface Store {
   id: number;
   name: string;
-  slug: string;
+  slug?: string;
   logo?: string;
   banner?: string;
   description?: string;
@@ -37,6 +41,7 @@ interface Store {
   email?: string;
   opening_hours?: string;
   established_date?: string;
+  city?: string;
 }
 
 interface ProductVariant {
@@ -60,18 +65,22 @@ interface Product {
   name: string;
   default_variant?: ProductVariant;
   variants?: ProductVariant[];
-  images?: { id: number; image: string }[];
+  images?: { id: number; image: string; image_url?: string }[];
   rating?: number;
   total_reviews?: number;
-  store?: {
-    id: number;
-    name: string;
-  };
 }
+
+const formatPrice = (price: number) => `\u09F3${(price || 0).toLocaleString()}`;
+
+const ensureAbsoluteUrl = (url?: string | null, fallback = 'https://via.placeholder.com/300x300/f3f8f1/299e60?text=Store'): string => {
+  if (!url) return fallback;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+};
 
 export default function StoreDetailScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams();
+  const { id } = useLocalSearchParams<{ id: string }>();
   const { addItem } = useCart();
   const { isInWishlist, addToWishlist, removeFromWishlist } = useWishlist();
 
@@ -81,14 +90,17 @@ export default function StoreDetailScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'products' | 'about'>('products');
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [addingProductId, setAddingProductId] = useState<number | null>(null);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+
+  const storeId = Number(id);
 
   const fetchStoreData = useCallback(async () => {
     try {
       const [storeData, productsData] = await Promise.all([
-        getStoreById(Number(id)),
-        getStoreProducts(Number(id), 1),
+        getStoreById(storeId),
+        getStoreProducts(storeId, 1),
       ]);
 
       setStore(storeData);
@@ -101,7 +113,7 @@ export default function StoreDetailScreen() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [id]);
+  }, [storeId]);
 
   useEffect(() => {
     fetchStoreData();
@@ -118,7 +130,7 @@ export default function StoreDetailScreen() {
     setIsLoadingMore(true);
     try {
       const nextPage = page + 1;
-      const moreProducts = await getStoreProducts(Number(id), nextPage);
+      const moreProducts = await getStoreProducts(storeId, nextPage);
 
       if (moreProducts && moreProducts.length > 0) {
         setProducts(prev => [...prev, ...moreProducts]);
@@ -134,23 +146,22 @@ export default function StoreDetailScreen() {
     }
   };
 
-  // Helper functions for product data
-  const getProductPrice = (product: Product): number => {
-    return product.default_variant?.final_price || product.default_variant?.price || 0;
-  };
+  const getProductPrice = (product: Product): number => (
+    product.default_variant?.final_price || product.default_variant?.price || product.variants?.[0]?.final_price || product.variants?.[0]?.price || 0
+  );
 
-  const getProductOriginalPrice = (product: Product): number => {
-    return product.default_variant?.price || 0;
-  };
+  const getProductOriginalPrice = (product: Product): number => (
+    product.default_variant?.price || product.variants?.[0]?.price || 0
+  );
 
   const hasDiscount = (product: Product): boolean => {
-    const variant = product.default_variant;
+    const variant = product.default_variant || product.variants?.[0];
     if (!variant) return false;
     return !!(variant.discount || (variant.price > variant.final_price));
   };
 
   const getDiscountPercent = (product: Product): number => {
-    const variant = product.default_variant;
+    const variant = product.default_variant || product.variants?.[0];
     if (!variant) return 0;
     if (variant.discount?.is_percentage) return variant.discount.value;
     if (variant.price > variant.final_price) {
@@ -160,29 +171,25 @@ export default function StoreDetailScreen() {
   };
 
   const getProductImage = (product: Product): string => {
-    // Try default_variant image first
-    if (product.default_variant?.image) return product.default_variant.image;
-    // Try images array
-    if (product.images && product.images.length > 0) {
-      const img = product.images[0];
-      if (typeof img === 'string') return img;
-      if (img?.image) return img.image;
-    }
-    // Try first variant
-    if (product.variants && product.variants.length > 0 && product.variants[0]?.image) {
-      return product.variants[0].image;
-    }
-    return 'https://via.placeholder.com/200';
+    const imageUrl =
+      product.default_variant?.image ||
+      product.images?.[0]?.image ||
+      product.images?.[0]?.image_url ||
+      product.variants?.[0]?.image ||
+      null;
+
+    return ensureAbsoluteUrl(imageUrl, 'https://via.placeholder.com/300x300/f3f8f1/299e60?text=Product');
   };
 
-  const handleAddToCart = (product: Product) => {
-    addItem({
-      id: product.id,
-      name: product.name,
-      price: getProductPrice(product),
-      image: getProductImage(product),
-      quantity: 1,
-    });
+  const handleAddToCart = async (product: Product) => {
+    if (addingProductId === product.id) return;
+
+    setAddingProductId(product.id);
+    try {
+      await addItem(product, 1, product.default_variant || product.variants?.[0]);
+    } finally {
+      setAddingProductId(null);
+    }
   };
 
   const toggleWishlist = (product: Product) => {
@@ -198,6 +205,126 @@ export default function StoreDetailScreen() {
     }
   };
 
+  const handleShare = async () => {
+    if (!store) return;
+    await Share.share({
+      title: store.name,
+      message: `Visit ${store.name} on Sobarbazar`,
+    });
+  };
+
+  const renderHeader = () => {
+    if (!store) return null;
+
+    const rating = store.rating || 0;
+    const totalProducts = store.total_products || products.length;
+    const description = formatHtmlText(store.description);
+
+    return (
+      <>
+        <LinearGradient colors={['#e9fbf0', '#fff5df']} style={styles.hero}>
+          <View style={styles.heroGlowOne} />
+          <View style={styles.heroGlowTwo} />
+
+          <View style={styles.heroTopRow}>
+            <TouchableOpacity style={styles.headerIconButton} onPress={() => router.back()}>
+              <Ionicons name="chevron-back" size={24} color="#12382b" />
+            </TouchableOpacity>
+            <Text style={styles.heroTitle} numberOfLines={1}>Seller Store</Text>
+            <TouchableOpacity style={styles.headerIconButton} onPress={handleShare}>
+              <Ionicons name="share-social-outline" size={21} color="#12382b" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.storeHeroCard}>
+            {store.banner ? (
+              <Image source={{ uri: ensureAbsoluteUrl(store.banner) }} style={styles.storeBanner} contentFit="cover" />
+            ) : (
+              <LinearGradient colors={['#12382b', '#299e60']} style={styles.storeBanner}>
+                <Ionicons name="storefront-outline" size={42} color="rgba(255,255,255,0.55)" />
+              </LinearGradient>
+            )}
+
+            <View style={styles.storeIdentityRow}>
+              <View style={styles.logoOuter}>
+                <Image
+                  source={{ uri: ensureAbsoluteUrl(store.logo, 'https://via.placeholder.com/120x120/eaf8ef/299e60?text=Shop') }}
+                  style={styles.storeLogo}
+                  contentFit="cover"
+                />
+              </View>
+              <View style={styles.storeIdentityText}>
+                <View style={styles.storeNameRow}>
+                  <Text style={styles.storeName} numberOfLines={1}>{store.name}</Text>
+                  {store.is_verified ? <Ionicons name="checkmark-circle" size={20} color="#299e60" /> : null}
+                </View>
+                <Text style={styles.storeSubtitle} numberOfLines={1}>
+                  {store.city || store.address || 'Trusted seller on Sobarbazar'}
+                </Text>
+              </View>
+            </View>
+
+            {description ? <Text style={styles.storeDescription} numberOfLines={2}>{description}</Text> : null}
+
+            <View style={styles.statsGrid}>
+              <View style={styles.statPill}>
+                <Ionicons name="cube-outline" size={17} color="#299e60" />
+                <View>
+                  <Text style={styles.statValue}>{totalProducts}</Text>
+                  <Text style={styles.statLabel}>Products</Text>
+                </View>
+              </View>
+              <View style={styles.statPill}>
+                <Ionicons name="star" size={17} color="#f59e0b" />
+                <View>
+                  <Text style={styles.statValue}>{rating > 0 ? rating.toFixed(1) : 'New'}</Text>
+                  <Text style={styles.statLabel}>Rating</Text>
+                </View>
+              </View>
+              <View style={styles.statPill}>
+                <Ionicons name="chatbubble-outline" size={17} color="#2563eb" />
+                <View>
+                  <Text style={styles.statValue}>{store.total_reviews || 0}</Text>
+                  <Text style={styles.statLabel}>Reviews</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        </LinearGradient>
+
+        <View style={styles.tabShell}>
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'products' && styles.tabButtonActive]}
+            onPress={() => setActiveTab('products')}
+          >
+            <Ionicons name="bag-handle-outline" size={17} color={activeTab === 'products' ? '#fff' : '#299e60'} />
+            <Text style={[styles.tabText, activeTab === 'products' && styles.tabTextActive]}>Products</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'about' && styles.tabButtonActive]}
+            onPress={() => setActiveTab('about')}
+          >
+            <Ionicons name="information-circle-outline" size={18} color={activeTab === 'about' ? '#fff' : '#299e60'} />
+            <Text style={[styles.tabText, activeTab === 'about' && styles.tabTextActive]}>About Seller</Text>
+          </TouchableOpacity>
+        </View>
+
+        {activeTab === 'products' ? (
+          <View style={styles.productsHeader}>
+            <View>
+              <Text style={styles.sectionTitle}>Store Products</Text>
+              <Text style={styles.sectionHint}>{products.length} items available</Text>
+            </View>
+            <View style={styles.sortChip}>
+              <Ionicons name="sparkles-outline" size={14} color="#299e60" />
+              <Text style={styles.sortChipText}>Featured</Text>
+            </View>
+          </View>
+        ) : null}
+      </>
+    );
+  };
+
   const renderProductCard = ({ item }: { item: Product }) => {
     const isWishlisted = isInWishlist(item.id);
     const productHasDiscount = hasDiscount(item);
@@ -205,208 +332,137 @@ export default function StoreDetailScreen() {
     const price = getProductPrice(item);
     const originalPrice = getProductOriginalPrice(item);
     const imageUrl = getProductImage(item);
+    const isAdding = addingProductId === item.id;
 
     return (
       <TouchableOpacity
         style={styles.productCard}
         onPress={() => router.push(`/screens/product/${item.id}`)}
-        activeOpacity={0.7}
+        activeOpacity={0.88}
       >
         <View style={styles.productImageContainer}>
-          <Image
-            source={{ uri: imageUrl }}
-            style={styles.productImage}
-            contentFit="cover"
-          />
-          {productHasDiscount && discountPercent > 0 && (
+          <Image source={{ uri: imageUrl }} style={styles.productImage} contentFit="cover" />
+          {productHasDiscount && discountPercent > 0 ? (
             <View style={styles.discountBadge}>
-              <Text style={styles.discountText}>-{discountPercent}%</Text>
+              <Text style={styles.discountText}>{discountPercent}% OFF</Text>
             </View>
-          )}
-          <TouchableOpacity
-            style={styles.wishlistButton}
-            onPress={() => toggleWishlist(item)}
-          >
-            <Ionicons
-              name={isWishlisted ? 'heart' : 'heart-outline'}
-              size={20}
-              color={isWishlisted ? '#EF4444' : '#6B7280'}
-            />
+          ) : null}
+          <TouchableOpacity style={styles.wishlistButton} onPress={() => toggleWishlist(item)}>
+            <Ionicons name={isWishlisted ? 'heart' : 'heart-outline'} size={19} color={isWishlisted ? '#EF4444' : '#12382b'} />
           </TouchableOpacity>
         </View>
+
         <View style={styles.productInfo}>
-          <Text style={styles.productName} numberOfLines={2}>
-            {item.name}
-          </Text>
+          <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
           <View style={styles.priceRow}>
-            <Text style={styles.productPrice}>
-              ৳{price.toLocaleString()}
-            </Text>
-            {productHasDiscount && originalPrice > price && (
-              <Text style={styles.originalPrice}>৳{originalPrice.toLocaleString()}</Text>
-            )}
+            <Text style={styles.productPrice}>{formatPrice(price)}</Text>
+            {productHasDiscount && originalPrice > price ? (
+              <Text style={styles.originalPrice}>{formatPrice(originalPrice)}</Text>
+            ) : null}
           </View>
-          {item.rating ? (
+          {(item.rating ?? 0) > 0 ? (
             <View style={styles.ratingRow}>
               <Ionicons name="star" size={12} color="#F59E0B" />
-              <Text style={styles.ratingText}>{item.rating.toFixed(1)}</Text>
-              {item.total_reviews ? (
-                <Text style={styles.reviewCount}>({item.total_reviews})</Text>
-              ) : null}
+              <Text style={styles.ratingText}>{item.rating?.toFixed(1)}</Text>
+              {(item.total_reviews ?? 0) > 0 ? <Text style={styles.reviewCount}>({item.total_reviews})</Text> : null}
             </View>
           ) : null}
         </View>
-        <TouchableOpacity
-          style={styles.addToCartButton}
-          onPress={() => handleAddToCart(item)}
-        >
-          <Ionicons name="cart-outline" size={16} color="#fff" />
-          <Text style={styles.addToCartText}>Add</Text>
+
+        <TouchableOpacity style={styles.addToCartButton} onPress={() => handleAddToCart(item)} disabled={isAdding}>
+          {isAdding ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <>
+              <Ionicons name="cart-outline" size={16} color="#fff" />
+              <Text style={styles.addToCartText}>Add</Text>
+            </>
+          )}
         </TouchableOpacity>
       </TouchableOpacity>
     );
   };
 
-  const renderAboutSection = () => (
-    <ScrollView style={styles.aboutContainer} showsVerticalScrollIndicator={false}>
-      {store?.description && (
-        <View style={styles.aboutSection}>
-          <Text style={styles.aboutSectionTitle}>About</Text>
-          <Text style={styles.aboutText}>{store.description}</Text>
+  const renderAboutSection = () => {
+    if (!store) return null;
+
+    const description = formatHtmlText(store.description) || 'This seller has not added a description yet.';
+    const infoRows = [
+      { icon: 'location-outline', label: 'Address', value: store.address },
+      { icon: 'call-outline', label: 'Phone', value: store.phone },
+      { icon: 'mail-outline', label: 'Email', value: store.email },
+      { icon: 'time-outline', label: 'Opening Hours', value: store.opening_hours },
+      { icon: 'calendar-outline', label: 'Established', value: store.established_date },
+    ].filter(item => item.value);
+
+    return (
+      <ScrollView style={styles.aboutContainer} showsVerticalScrollIndicator={false} contentContainerStyle={styles.aboutContent}>
+        <View style={styles.aboutCard}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>About Seller</Text>
+            <Ionicons name="storefront-outline" size={20} color="#299e60" />
+          </View>
+          <Text style={styles.aboutText}>{description}</Text>
         </View>
-      )}
 
-      <View style={styles.aboutSection}>
-        <Text style={styles.aboutSectionTitle}>Store Information</Text>
-
-        {store?.address && (
-          <View style={styles.infoItem}>
-            <View style={styles.infoIcon}>
-              <Ionicons name="location-outline" size={20} color="#3B82F6" />
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>Address</Text>
-              <Text style={styles.infoValue}>{store.address}</Text>
-            </View>
-          </View>
-        )}
-
-        {store?.phone && (
-          <View style={styles.infoItem}>
-            <View style={styles.infoIcon}>
-              <Ionicons name="call-outline" size={20} color="#3B82F6" />
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>Phone</Text>
-              <Text style={styles.infoValue}>{store.phone}</Text>
-            </View>
-          </View>
-        )}
-
-        {store?.email && (
-          <View style={styles.infoItem}>
-            <View style={styles.infoIcon}>
-              <Ionicons name="mail-outline" size={20} color="#3B82F6" />
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>Email</Text>
-              <Text style={styles.infoValue}>{store.email}</Text>
-            </View>
-          </View>
-        )}
-
-        {store?.opening_hours && (
-          <View style={styles.infoItem}>
-            <View style={styles.infoIcon}>
-              <Ionicons name="time-outline" size={20} color="#3B82F6" />
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>Opening Hours</Text>
-              <Text style={styles.infoValue}>{store.opening_hours}</Text>
-            </View>
-          </View>
-        )}
-
-        {store?.established_date && (
-          <View style={styles.infoItem}>
-            <View style={styles.infoIcon}>
-              <Ionicons name="calendar-outline" size={20} color="#3B82F6" />
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>Established</Text>
-              <Text style={styles.infoValue}>{store.established_date}</Text>
-            </View>
-          </View>
-        )}
-      </View>
-
-      <View style={styles.statsSection}>
-        <View style={styles.statCard}>
-          <View style={styles.statIconContainer}>
-            <Ionicons name="cube-outline" size={24} color="#3B82F6" />
-          </View>
-          <Text style={styles.statValue}>{store?.total_products || 0}</Text>
-          <Text style={styles.statLabel}>Products</Text>
+        <View style={styles.aboutCard}>
+          <Text style={styles.sectionTitle}>Store Information</Text>
+          {infoRows.length > 0 ? (
+            infoRows.map((row) => (
+              <View key={row.label} style={styles.infoItem}>
+                <View style={styles.infoIcon}>
+                  <Ionicons name={row.icon as any} size={20} color="#299e60" />
+                </View>
+                <View style={styles.infoContent}>
+                  <Text style={styles.infoLabel}>{row.label}</Text>
+                  <Text style={styles.infoValue}>{row.value}</Text>
+                </View>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.aboutText}>No additional seller information available.</Text>
+          )}
         </View>
-        <View style={styles.statCard}>
-          <View style={styles.statIconContainer}>
-            <Ionicons name="star-outline" size={24} color="#F59E0B" />
-          </View>
-          <Text style={styles.statValue}>{store?.rating?.toFixed(1) || 'N/A'}</Text>
-          <Text style={styles.statLabel}>Rating</Text>
-        </View>
-        <View style={styles.statCard}>
-          <View style={styles.statIconContainer}>
-            <Ionicons name="chatbubble-outline" size={24} color="#10B981" />
-          </View>
-          <Text style={styles.statValue}>{store?.total_reviews || 0}</Text>
-          <Text style={styles.statLabel}>Reviews</Text>
-        </View>
-      </View>
-    </ScrollView>
-  );
+      </ScrollView>
+    );
+  };
 
   const renderEmptyProducts = () => (
     <View style={styles.emptyState}>
       <View style={styles.emptyIconContainer}>
-        <Ionicons name="cube-outline" size={64} color="#9CA3AF" />
+        <Ionicons name="cube-outline" size={58} color="#9CA3AF" />
       </View>
       <Text style={styles.emptyTitle}>No products yet</Text>
-      <Text style={styles.emptySubtitle}>This store hasn't added any products</Text>
+      <Text style={styles.emptySubtitle}>This seller has not added products yet.</Text>
     </View>
   );
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#3B82F6" />
-          <Text style={styles.loadingText}>Loading store...</Text>
-        </View>
-      </SafeAreaView>
+      <LinearGradient colors={['#e9fbf0', '#fff5df']} style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#299e60" />
+        <Text style={styles.loadingText}>Loading seller store...</Text>
+      </LinearGradient>
     );
   }
 
   if (!store) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={24} color="#1F2937" />
+        <View style={styles.notFoundHeader}>
+          <TouchableOpacity style={styles.headerIconButton} onPress={() => router.back()}>
+            <Ionicons name="chevron-back" size={24} color="#12382b" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Store Not Found</Text>
-          <View style={styles.headerRight} />
+          <Text style={styles.notFoundTitle}>Store Not Found</Text>
+          <View style={styles.headerIconButtonPlaceholder} />
         </View>
         <View style={styles.emptyState}>
           <View style={styles.emptyIconContainer}>
-            <Ionicons name="storefront-outline" size={64} color="#9CA3AF" />
+            <Ionicons name="storefront-outline" size={58} color="#9CA3AF" />
           </View>
           <Text style={styles.emptyTitle}>Store not found</Text>
-          <Text style={styles.emptySubtitle}>This store may have been removed</Text>
-          <TouchableOpacity
-            style={styles.backToStoresButton}
-            onPress={() => router.push('/screens/stores')}
-          >
+          <Text style={styles.emptySubtitle}>This seller may have been removed.</Text>
+          <TouchableOpacity style={styles.backToStoresButton} onPress={() => router.push('/screens/stores')}>
             <Text style={styles.backToStoresText}>Browse All Stores</Text>
           </TouchableOpacity>
         </View>
@@ -416,80 +472,6 @@ export default function StoreDetailScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#1F2937" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          {store.name}
-        </Text>
-        <TouchableOpacity style={styles.shareButton}>
-          <Ionicons name="share-outline" size={22} color="#1F2937" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Store Banner & Info */}
-      <View style={styles.storeHeader}>
-        {store.banner && (
-          <Image
-            source={{ uri: store.banner }}
-            style={styles.storeBanner}
-            contentFit="cover"
-          />
-        )}
-        <View style={styles.storeInfoContainer}>
-          <Image
-            source={{ uri: store.logo || 'https://via.placeholder.com/80' }}
-            style={styles.storeLogo}
-            contentFit="cover"
-          />
-          <View style={styles.storeDetails}>
-            <View style={styles.storeNameRow}>
-              <Text style={styles.storeName} numberOfLines={1}>
-                {store.name}
-              </Text>
-              {store.is_verified && (
-                <Ionicons name="checkmark-circle" size={18} color="#3B82F6" />
-              )}
-            </View>
-            <View style={styles.storeStats}>
-              {store.rating && (
-                <View style={styles.storeStat}>
-                  <Ionicons name="star" size={14} color="#F59E0B" />
-                  <Text style={styles.storeStatText}>{store.rating.toFixed(1)}</Text>
-                </View>
-              )}
-              <View style={styles.storeStat}>
-                <Ionicons name="cube-outline" size={14} color="#6B7280" />
-                <Text style={styles.storeStatText}>{store.total_products || 0} Products</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-      </View>
-
-      {/* Tabs */}
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'products' && styles.activeTab]}
-          onPress={() => setActiveTab('products')}
-        >
-          <Text style={[styles.tabText, activeTab === 'products' && styles.activeTabText]}>
-            Products
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'about' && styles.activeTab]}
-          onPress={() => setActiveTab('about')}
-        >
-          <Text style={[styles.tabText, activeTab === 'about' && styles.activeTabText]}>
-            About
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Tab Content */}
       {activeTab === 'products' ? (
         <FlatList
           data={products}
@@ -497,32 +479,26 @@ export default function StoreDetailScreen() {
           keyExtractor={(item) => item.id.toString()}
           numColumns={2}
           columnWrapperStyle={styles.productRow}
-          contentContainerStyle={[
-            styles.productsContainer,
-            products.length === 0 && styles.emptyProductsContainer,
-          ]}
+          ListHeaderComponent={renderHeader}
+          contentContainerStyle={[styles.productsContainer, products.length === 0 && styles.emptyProductsContainer]}
           showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={onRefresh}
-              colors={['#3B82F6']}
-              tintColor="#3B82F6"
-            />
-          }
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} colors={['#299e60']} tintColor="#299e60" />}
           onEndReached={loadMoreProducts}
           onEndReachedThreshold={0.5}
           ListEmptyComponent={renderEmptyProducts}
           ListFooterComponent={
             isLoadingMore ? (
               <View style={styles.loadingMore}>
-                <ActivityIndicator size="small" color="#3B82F6" />
+                <ActivityIndicator size="small" color="#299e60" />
               </View>
             ) : null
           }
         />
       ) : (
-        renderAboutSection()
+        <View style={styles.container}>
+          {renderHeader()}
+          {renderAboutSection()}
+        </View>
       )}
     </SafeAreaView>
   );
@@ -531,7 +507,7 @@ export default function StoreDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#F3F8F1',
   },
   loadingContainer: {
     flex: 1,
@@ -540,70 +516,103 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 12,
-    fontSize: 14,
-    color: '#6B7280',
+    fontSize: 15,
+    color: '#53665b',
+    fontWeight: '700',
   },
-  header: {
+  hero: {
+    paddingHorizontal: 16,
+    paddingBottom: 18,
+    overflow: 'hidden',
+  },
+  heroGlowOne: {
+    position: 'absolute',
+    right: -48,
+    top: 46,
+    width: 170,
+    height: 170,
+    borderRadius: 85,
+    backgroundColor: 'rgba(41,158,96,0.12)',
+  },
+  heroGlowTwo: {
+    position: 'absolute',
+    left: -42,
+    bottom: 20,
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    backgroundColor: 'rgba(255,169,41,0.14)',
+  },
+  heroTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    paddingTop: 6,
+    paddingBottom: 12,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
+  headerIconButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.9)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(41,158,96,0.1)',
   },
-  headerTitle: {
-    flex: 1,
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1F2937',
-    marginHorizontal: 12,
-    textAlign: 'center',
+  headerIconButtonPlaceholder: {
+    width: 42,
+    height: 42,
   },
-  headerRight: {
-    width: 40,
+  heroTitle: {
+    color: '#12382b',
+    fontSize: 16,
+    fontWeight: '900',
   },
-  shareButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  storeHeader: {
-    backgroundColor: '#fff',
+  storeHeroCard: {
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    borderRadius: 30,
+    overflow: 'hidden',
+    shadowColor: '#12382b',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.12,
+    shadowRadius: 22,
+    elevation: 8,
   },
   storeBanner: {
     width: '100%',
-    height: 120,
+    height: 122,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  storeInfoContainer: {
+  storeIdentityRow: {
     flexDirection: 'row',
-    padding: 16,
-    marginTop: -32,
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    marginTop: -30,
+  },
+  logoOuter: {
+    width: 78,
+    height: 78,
+    borderRadius: 24,
+    padding: 4,
+    backgroundColor: '#fff',
+    shadowColor: '#12382b',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 5,
   },
   storeLogo: {
-    width: 72,
-    height: 72,
-    borderRadius: 12,
-    backgroundColor: '#F3F4F6',
-    borderWidth: 3,
-    borderColor: '#fff',
+    width: '100%',
+    height: '100%',
+    borderRadius: 20,
+    backgroundColor: '#EAF8EF',
   },
-  storeDetails: {
+  storeIdentityText: {
     flex: 1,
-    marginLeft: 12,
-    marginTop: 32,
+    marginLeft: 13,
+    paddingTop: 28,
   },
   storeNameRow: {
     flexDirection: 'row',
@@ -611,117 +620,184 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   storeName: {
-    fontSize: 18,
+    flex: 1,
+    color: '#12382b',
+    fontSize: 21,
+    fontWeight: '900',
+  },
+  storeSubtitle: {
+    marginTop: 4,
+    color: '#718077',
+    fontSize: 12,
     fontWeight: '700',
-    color: '#1F2937',
-    flex: 1,
   },
-  storeStats: {
-    flexDirection: 'row',
-    marginTop: 6,
-    gap: 16,
-  },
-  storeStat: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  storeStatText: {
+  storeDescription: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    color: '#4b5b52',
     fontSize: 13,
-    color: '#6B7280',
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 14,
-    alignItems: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-  },
-  activeTab: {
-    borderBottomColor: '#3B82F6',
-  },
-  tabText: {
-    fontSize: 15,
+    lineHeight: 20,
     fontWeight: '600',
-    color: '#6B7280',
   },
-  activeTabText: {
-    color: '#3B82F6',
-  },
-  productsContainer: {
+  statsGrid: {
+    flexDirection: 'row',
+    gap: 9,
     padding: 16,
   },
-  emptyProductsContainer: {
+  statPill: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    backgroundColor: '#F3F8F1',
+    borderRadius: 18,
+    paddingHorizontal: 10,
+    paddingVertical: 12,
+  },
+  statValue: {
+    color: '#12382b',
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  statLabel: {
+    color: '#7A887F',
+    fontSize: 10,
+    fontWeight: '800',
+    marginTop: 1,
+  },
+  tabShell: {
+    flexDirection: 'row',
+    gap: 10,
+    padding: 12,
+    marginHorizontal: 16,
+    marginTop: -2,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    shadowColor: '#12382b',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 4,
+  },
+  tabButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 18,
+    backgroundColor: '#EAF8EF',
+  },
+  tabButtonActive: {
+    backgroundColor: '#299e60',
+  },
+  tabText: {
+    color: '#299e60',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  tabTextActive: {
+    color: '#fff',
+  },
+  productsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 12,
+  },
+  sectionTitle: {
+    color: '#12382b',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  sectionHint: {
+    color: '#7A887F',
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 3,
+  },
+  sortChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#EAF8EF',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  sortChipText: {
+    color: '#299e60',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  productsContainer: {
+    paddingBottom: 28,
+  },
+  emptyProductsContainer: {
+    flexGrow: 1,
   },
   productRow: {
     justifyContent: 'space-between',
+    paddingHorizontal: 16,
   },
   productCard: {
     width: PRODUCT_CARD_WIDTH,
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 22,
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowColor: '#12382b',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 4,
     overflow: 'hidden',
   },
   productImageContainer: {
     position: 'relative',
+    backgroundColor: '#F3F8F1',
   },
   productImage: {
     width: '100%',
     height: PRODUCT_CARD_WIDTH,
-    backgroundColor: '#F3F4F6',
   },
   discountBadge: {
     position: 'absolute',
-    top: 8,
-    left: 8,
+    top: 9,
+    left: 9,
     backgroundColor: '#EF4444',
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    paddingVertical: 5,
+    borderRadius: 999,
   },
   discountText: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 10,
+    fontWeight: '900',
     color: '#fff',
   },
   wishlistButton: {
     position: 'absolute',
     top: 8,
     right: 8,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#fff',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.94)',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
   },
   productInfo: {
     padding: 12,
   },
   productName: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 6,
+    fontWeight: '800',
+    color: '#12382b',
+    marginBottom: 8,
     lineHeight: 18,
+    minHeight: 36,
   },
   priceRow: {
     flexDirection: 'row',
@@ -730,24 +806,25 @@ const styles = StyleSheet.create({
   },
   productPrice: {
     fontSize: 15,
-    fontWeight: '700',
-    color: '#3B82F6',
+    fontWeight: '900',
+    color: '#299e60',
   },
   originalPrice: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#9CA3AF',
+    fontWeight: '700',
     textDecorationLine: 'line-through',
   },
   ratingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 6,
+    marginTop: 7,
     gap: 4,
   },
   ratingText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#1F2937',
+    fontWeight: '800',
+    color: '#12382b',
   },
   reviewCount: {
     fontSize: 11,
@@ -757,48 +834,54 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#3B82F6',
-    paddingVertical: 10,
-    gap: 4,
+    backgroundColor: '#299e60',
+    paddingVertical: 11,
+    gap: 5,
   },
   addToCartText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '900',
     color: '#fff',
   },
   aboutContainer: {
     flex: 1,
-    padding: 16,
   },
-  aboutSection: {
+  aboutContent: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+  aboutCard: {
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    borderRadius: 24,
+    padding: 18,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#E6EFE8',
   },
-  aboutSectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1F2937',
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 12,
   },
   aboutText: {
     fontSize: 14,
-    color: '#4B5563',
-    lineHeight: 22,
+    color: '#4B5B52',
+    lineHeight: 23,
+    fontWeight: '500',
   },
   infoItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    paddingVertical: 12,
+    paddingVertical: 13,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: '#EEF3EF',
   },
   infoIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: '#EFF6FF',
+    width: 42,
+    height: 42,
+    borderRadius: 15,
+    backgroundColor: '#EAF8EF',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -808,85 +891,70 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontSize: 12,
-    color: '#9CA3AF',
-    marginBottom: 2,
+    color: '#7A887F',
+    fontWeight: '800',
+    marginBottom: 3,
   },
   infoValue: {
     fontSize: 14,
-    color: '#1F2937',
-    fontWeight: '500',
-  },
-  statsSection: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 24,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-  },
-  statIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  statValue: {
-    fontSize: 18,
+    color: '#12382b',
     fontWeight: '700',
-    color: '#1F2937',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 2,
+    lineHeight: 20,
   },
   emptyState: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
+    paddingVertical: 44,
   },
   emptyIconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#F3F4F6',
+    width: 112,
+    height: 112,
+    borderRadius: 56,
+    backgroundColor: '#EAF8EF',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 24,
+    marginBottom: 18,
   },
   emptyTitle: {
     fontSize: 20,
-    fontWeight: '700',
-    color: '#1F2937',
+    fontWeight: '900',
+    color: '#12382b',
     marginBottom: 8,
   },
   emptySubtitle: {
     fontSize: 14,
-    color: '#6B7280',
+    color: '#7A887F',
     textAlign: 'center',
+    lineHeight: 20,
   },
   backToStoresButton: {
-    marginTop: 24,
-    backgroundColor: '#3B82F6',
-    paddingHorizontal: 24,
+    marginTop: 22,
+    backgroundColor: '#299e60',
+    paddingHorizontal: 22,
     paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: 999,
   },
   backToStoresText: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '900',
     color: '#fff',
   },
+  notFoundHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    backgroundColor: '#e9fbf0',
+  },
+  notFoundTitle: {
+    color: '#12382b',
+    fontSize: 17,
+    fontWeight: '900',
+  },
   loadingMore: {
-    paddingVertical: 20,
+    paddingVertical: 22,
     alignItems: 'center',
   },
 });

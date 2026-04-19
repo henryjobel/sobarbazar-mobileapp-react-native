@@ -55,7 +55,7 @@ export default function ForgotPasswordScreen() {
         const data = await response.json();
         Alert.alert('Error', data.detail || 'Failed to send reset email. Please try again.');
       }
-    } catch (err) {
+    } catch {
       Alert.alert('Error', 'Network error. Please check your connection.');
     } finally {
       setIsLoading(false);
@@ -206,3 +206,4 @@ export default function ForgotPasswordScreen() {
     </SafeAreaView>
   );
 }
+

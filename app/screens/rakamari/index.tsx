@@ -146,7 +146,7 @@ export default function RakamariScreen() {
       image: getProductImage(product),
     });
     setAddingId(null);
-    if (success) console.log('✅ Added to cart:', product.name);
+    if (success) __DEV__ && __DEV__ && console.log('✅ Added to cart:', product.name);
   };
 
   const handleLoadMore = () => {

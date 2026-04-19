@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React from 'react';
+import React, { useState } from 'react';
 import { Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useCart } from '@/context/CartContext';
@@ -8,6 +8,16 @@ import { useCart } from '@/context/CartContext';
 export default function Header() {
   const router = useRouter();
   const { itemCount } = useCart();
+  const [searchText, setSearchText] = useState('');
+
+  const handleSearch = () => {
+    const query = searchText.trim();
+    if (!query) return;
+    router.push({
+      pathname: '/screens/search',
+      params: { q: query },
+    });
+  };
 
   return (
     <View
@@ -19,10 +29,10 @@ export default function Header() {
         style={{ width: 120, height: 40 }}
         contentFit="contain"
       />
-      
+
       {/* search input field */}
       <View className="flex-1 mx-3">
-        <View className="flex-row items-center bg-white rounded-full border border-[#299e60] px-4 shadow-sm" 
+        <View className="flex-row items-center bg-white rounded-full border border-[#299e60] px-4 shadow-sm"
           style={{
             shadowColor: '#299e60',
             shadowOffset: { width: 0, height: 2 },
@@ -31,16 +41,23 @@ export default function Header() {
             elevation: 3,
           }}
         >
-          <TextInput 
+          <TextInput
             placeholder="Search products..."
             placeholderTextColor="#888"
             className="flex-1 mr-2 py-2 text-gray-800 text-sm"
+            value={searchText}
+            onChangeText={setSearchText}
+            onSubmitEditing={handleSearch}
+            returnKeyType="search"
           />
-          <Ionicons name='search' size={20} color="#299e60"/>
+          <TouchableOpacity onPress={handleSearch} hitSlop={8}>
+            <Ionicons name='search' size={20} color="#299e60"/>
+          </TouchableOpacity>
         </View>
       </View>
-      
-      <TouchableOpacity 
+
+      <TouchableOpacity
+        onPress={() => router.push('/(routes)/notifications')}
         className="p-2 bg-white rounded-full border border-[#299e60]"
         style={{
           shadowColor: '#299e60',

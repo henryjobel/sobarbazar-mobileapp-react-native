@@ -13,6 +13,8 @@
     "**/*.tsx",
     "nativewind-env.d.ts",
     "utils/helper.js",
-    "data/ProductData.js"
+    "data/ProductData.js",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
   ]
 }

@@ -3,15 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
 import { StyleSheet, Text, ViewStyle } from 'react-native';
 
-
-
-interface SubHeaderProps {
-  // You can add props here if needed
-  // Example: location?: string;
-  // Example: userName?: string;
-}
-
-const SubHeader: React.FC<SubHeaderProps> = () => {
+const SubHeader = () => {
   return (
     <LinearGradient
       start={{ x: 0, y: 0 }}

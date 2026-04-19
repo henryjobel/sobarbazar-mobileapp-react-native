@@ -17,7 +17,7 @@ export const storeUserData = async (user: User): Promise<void> => {
   try {
     const userString = JSON.stringify(user);
     await SecureStore.setItemAsync("user", userString);
-    console.log("User data stored successfully");
+    __DEV__ && __DEV__ && console.log("User data stored successfully");
   } catch (error) {
     console.error("Error storing user data:", error);
     throw error;
@@ -43,7 +43,7 @@ export const getUserData = async (): Promise<User | null> => {
 export const removeUserData = async (): Promise<void> => {
   try {
     await SecureStore.deleteItemAsync("user");
-    console.log("User data removed successfully");
+    __DEV__ && __DEV__ && console.log("User data removed successfully");
   } catch (error) {
     console.error("Error removing user data:", error);
     throw error;
@@ -98,80 +98,4 @@ export const useUser = () => {
     logout,
     refreshUser: loadUser
   };
-};
-
-// Example usage in a component
-export const UserProfile: React.FC = () => {
-  const { user, loading, logout } = useUser();
-
-  if (loading) {
-    return (
-      <div className="p-4">
-        <Text className="text-gray-600">Loading user data...</Text>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="p-4">
-        <Text className="text-gray-600">No user logged in</Text>
-      </div>
-    );
-  }
-
-  return (
-    <View className="p-4">
-      <Text className="text-xl font-bold text-gray-800">{user.name}</Text>
-      <Text className="text-gray-600">{user.email}</Text>
-      {user.avatar && (
-        <Image 
-          source={{ uri: user.avatar.url }} 
-          className="w-20 h-20 rounded-full mt-2"
-        />
-      )}
-      <TouchableOpacity 
-        className="bg-red-500 rounded-lg py-2 px-4 mt-4"
-        onPress={logout}
-      >
-        <Text className="text-white text-center font-semibold">Logout</Text>
-      </TouchableOpacity>
-    </View>
-  );
-};
-
-// Example usage in login
-export const LoginComponent: React.FC = () => {
-  const { login } = useUser();
-
-  const handleLogin = async () => {
-    try {
-      const mockUser: User = {
-        id: "1",
-        name: "John Doe",
-        email: "john@example.com",
-        avatar: {
-          id: "avatar1",
-          file_id: "file123",
-          url: "https://example.com/avatar.jpg"
-        }
-      };
-      
-      await login(mockUser);
-      console.log("Login successful");
-    } catch (error) {
-      console.error("Login failed:", error);
-    }
-  };
-
-  return (
-    <View className="p-4">
-      <TouchableOpacity 
-        className="bg-main-600 rounded-lg py-3 px-6"
-        onPress={handleLogin}
-      >
-        <Text className="text-white text-center font-semibold">Login</Text>
-      </TouchableOpacity>
-    </View>
-  );
 };

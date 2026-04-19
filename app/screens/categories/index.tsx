@@ -35,9 +35,9 @@ export default function AllCategoriesScreen() {
 
   const fetchCategories = useCallback(async () => {
     try {
-      console.log('📂 All Categories: Fetching categories');
+      __DEV__ && __DEV__ && console.log('📂 All Categories: Fetching categories');
       const data = await getCategories();
-      console.log('📂 All Categories: Got', data?.length || 0, 'categories');
+      __DEV__ && __DEV__ && console.log('📂 All Categories: Got', data?.length || 0, 'categories');
       const categoriesArray = Array.isArray(data) ? data : [];
       setCategories(categoriesArray);
       setFilteredCategories(categoriesArray);
@@ -75,12 +75,12 @@ export default function AllCategoriesScreen() {
     if (category.subcategories && category.subcategories.length > 0) {
       setSelectedCategory(category);
     } else {
-      router.push(`/screens/shop?category=${category.id}&name=${encodeURIComponent(category.name)}`);
+      router.push(`/(tabs)/shop?category=${category.id}&name=${encodeURIComponent(category.name)}`);
     }
   };
 
   const handleSubcategoryPress = (subcategory: Category) => {
-    router.push(`/screens/shop?category=${subcategory.id}&name=${encodeURIComponent(subcategory.name)}`);
+    router.push(`/(tabs)/shop?category=${subcategory.id}&name=${encodeURIComponent(subcategory.name)}`);
   };
 
   const handleGoBack = () => {
@@ -131,7 +131,7 @@ export default function AllCategoriesScreen() {
         <ScrollView className="flex-1 px-4 pt-4" showsVerticalScrollIndicator={false}>
           <TouchableOpacity
             className="bg-main-600 rounded-2xl p-4 mb-4 flex-row items-center"
-            onPress={() => router.push(`/screens/shop?category=${selectedCategory.id}&name=${encodeURIComponent(selectedCategory.name)}`)}
+            onPress={() => router.push(`/(tabs)/shop?category=${selectedCategory.id}&name=${encodeURIComponent(selectedCategory.name)}`)}
             activeOpacity={0.8}
           >
             <View className="w-12 h-12 bg-white/20 rounded-xl items-center justify-center">
@@ -223,7 +223,7 @@ export default function AllCategoriesScreen() {
       >
         <TouchableOpacity
           className="mx-4 mt-4 bg-gradient-to-r from-main-600 to-emerald-600 rounded-2xl overflow-hidden"
-          onPress={() => router.push('/screens/shop')}
+          onPress={() => router.push('/(tabs)/shop')}
           activeOpacity={0.9}
         >
           <View className="bg-main-600 p-5 flex-row items-center">
@@ -307,3 +307,4 @@ export default function AllCategoriesScreen() {
     </SafeAreaView>
   );
 }
+

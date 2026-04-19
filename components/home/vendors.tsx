@@ -1,81 +1,103 @@
+import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { formatHtmlText } from '../../utils/htmlText';
+
+const API_BASE_URL = 'https://api.hetdcl.com';
 
 interface Store {
   id: number | string;
   name: string;
   logo?: string;
+  banner?: string;
   description?: string;
   address?: string;
+  city?: string;
   phone_number?: string;
   is_active?: boolean;
+  is_verified?: boolean;
   isExclusive?: boolean;
+  rating?: number;
+  total_products?: number;
 }
 
 interface VendorsProps {
   stores?: Store[];
 }
 
-// Fallback stores if no API data
 const fallbackStores: Store[] = [
   {
     id: 1,
-    name: 'Nike Store',
-    logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a6/Logo_NIKE.svg/200px-Logo_NIKE.svg.png',
-    description: 'Sportswear & Shoes',
+    name: 'Sobarbazar Mart',
+    logo: 'https://via.placeholder.com/160/eaf8ef/299e60?text=SM',
+    description: 'Curated everyday products',
+    is_verified: true,
+    total_products: 120,
   },
   {
     id: 2,
-    name: 'Apple Store',
-    logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/fa/Apple_logo_black.svg/200px-Apple_logo_black.svg.png',
-    description: 'Premium Electronics',
+    name: 'Daily Kitchen',
+    logo: 'https://via.placeholder.com/160/fff6e7/f59e0b?text=DK',
+    description: 'Kitchen and home essentials',
+    total_products: 84,
   },
   {
     id: 3,
-    name: 'Samsung Store',
-    logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/24/Samsung_Logo.svg/200px-Samsung_Logo.svg.png',
-    description: 'Smartphones & Appliances',
+    name: 'Fashion Corner',
+    logo: 'https://via.placeholder.com/160/eef4ff/2563eb?text=FC',
+    description: 'Trendy fashion picks',
+    total_products: 96,
   },
 ];
 
+const ensureAbsoluteUrl = (
+  url?: string | null,
+  fallback = 'https://via.placeholder.com/160/eaf8ef/299e60?text=Shop'
+): string => {
+  if (!url) return fallback;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+};
+
 export default function Vendors({ stores }: VendorsProps) {
   const router = useRouter();
-  const [followed, setFollowed] = useState<Record<number, boolean>>({});
+  const [followed, setFollowed] = useState<Record<string, boolean>>({});
 
-  // RAKAMARI exclusive fake store (frontend pattern: insert in middle)
   const rakamariStore: Store = {
     id: 'rokomari',
     name: 'RAKAMARI',
     logo: 'https://api.hetdcl.com/static/images/rakamari-logo.png',
-    description: 'Exclusive Online Store',
+    description: 'Exclusive online seller collection',
     isExclusive: true,
+    is_verified: true,
+    total_products: 250,
   };
 
-  // Use API stores if available, otherwise use fallback
   const apiStores = stores && stores.length > 0 ? stores : fallbackStores;
+  const hasRakamari = apiStores.some((store) => store.name?.toLowerCase().includes('rakamari'));
+  const displayStores = hasRakamari
+    ? apiStores
+    : [
+        ...apiStores.slice(0, Math.floor(apiStores.length / 2)),
+        rakamariStore,
+        ...apiStores.slice(Math.floor(apiStores.length / 2)),
+      ];
 
-  // Insert RAKAMARI in the middle (same as frontend TopVendorsOne pattern)
-  const hasRakamari = apiStores.some(s => s.name?.toLowerCase().includes('rakamari'));
-  let displayStores: Store[];
-  if (!hasRakamari) {
-    const mid = Math.floor(apiStores.length / 2);
-    displayStores = [...apiStores.slice(0, mid), rakamariStore, ...apiStores.slice(mid)];
-  } else {
-    displayStores = apiStores;
-  }
-
-  const toggleFollow = (id: number) => {
-    setFollowed((prev) => ({ ...prev, [id]: !prev[id] }));
+  const toggleFollow = (id: number | string) => {
+    const key = String(id);
+    setFollowed((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   const visitShop = (store: Store) => {
     if (store.isExclusive) {
       router.push('/screens/rakamari');
-    } else {
-      router.push(`/screens/store/${store.id}`);
+      return;
     }
+
+    router.push(`/screens/store/${store.id}`);
   };
 
   const handleViewAll = () => {
@@ -89,67 +111,124 @@ export default function Vendors({ stores }: VendorsProps) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Top Shops</Text>
-          <Text style={styles.subtitle}>Browse your favorite vendor shops</Text>
+        <View style={styles.headerCopy}>
+          <View style={styles.eyebrowRow}>
+            <Ionicons name="storefront-outline" size={14} color="#299e60" />
+            <Text style={styles.eyebrow}>Seller spotlight</Text>
+          </View>
+          <Text style={styles.title}>Featured Sellers</Text>
+          <Text style={styles.subtitle}>Trusted shops with fresh collections.</Text>
         </View>
-        <TouchableOpacity onPress={handleViewAll}>
-          <Text style={styles.viewAll}>View All</Text>
+
+        <TouchableOpacity style={styles.viewAllPill} onPress={handleViewAll} activeOpacity={0.85}>
+          <Text style={styles.viewAllText}>All Stores</Text>
+          <Ionicons name="arrow-forward" size={14} color="#299e60" />
         </TouchableOpacity>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.scroll}>
-        {displayStores.map((store) => (
-          <View key={store.id.toString()} style={[styles.card, store.isExclusive && styles.exclusiveCard]}>
-            {/* RAKAMARI badge */}
-            {store.isExclusive && (
-              <View style={styles.exclusiveLabelRow}>
-                <Text style={styles.exclusiveLabel}>⭐ EXCLUSIVE</Text>
-              </View>
-            )}
-            {/* Logo */}
-            <View style={styles.logoContainer}>
-              <Image
-                source={{ uri: store.logo || 'https://via.placeholder.com/80' }}
-                style={styles.logo}
-                contentFit="contain"
-              />
-            </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {displayStores.map((store) => {
+          const key = String(store.id);
+          const isFollowed = followed[key];
+          const cleanDescription =
+            formatHtmlText(store.description) ||
+            store.address ||
+            store.city ||
+            'Quality products from this seller';
 
-            {/* Shop Name */}
-            <Text style={[styles.shopName, store.isExclusive && styles.exclusiveShopName]} numberOfLines={1}>
-              {store.name}
-            </Text>
-
-            {/* Description/Tagline */}
-            <Text style={styles.tagline} numberOfLines={2}>
-              {store.description || store.address || 'Quality Products'}
-            </Text>
-
-            {/* Buttons */}
-            <View style={styles.buttonRow}>
-              {!store.isExclusive && (
-                <TouchableOpacity
-                  style={[styles.followButton, followed[store.id] ? styles.following : styles.follow]}
-                  onPress={() => toggleFollow(store.id as number)}
-                >
-                  <Text style={[styles.followText, followed[store.id] && { color: '#299e60' }]}>
-                    {followed[store.id] ? 'Following' : 'Follow'}
-                  </Text>
-                </TouchableOpacity>
-              )}
-
-              <TouchableOpacity
-                style={[styles.visitButton, store.isExclusive && styles.exclusiveVisitButton]}
-                onPress={() => visitShop(store)}
+          return (
+            <TouchableOpacity
+              key={key}
+              style={[styles.card, store.isExclusive ? styles.exclusiveCard : null]}
+              onPress={() => visitShop(store)}
+              activeOpacity={0.9}
+            >
+              <LinearGradient
+                colors={store.isExclusive ? ['#fff0c2', '#f59e0b'] : ['#dff8e9', '#f8fff9']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.cardHero}
               >
-                <Text style={[styles.visitText, store.isExclusive && styles.exclusiveVisitText]}>
-                  {store.isExclusive ? 'Explore' : 'Visit Shop'}
+                <View style={styles.heroOrbLarge} />
+                <View style={styles.heroOrbSmall} />
+
+                {store.isExclusive ? (
+                  <View style={styles.exclusiveBadge}>
+                    <Ionicons name="sparkles" size={12} color="#92400e" />
+                    <Text style={styles.exclusiveBadgeText}>Exclusive</Text>
+                  </View>
+                ) : store.is_verified ? (
+                  <View style={styles.verifiedBadge}>
+                    <Ionicons name="checkmark-circle" size={12} color="#fff" />
+                    <Text style={styles.verifiedBadgeText}>Verified</Text>
+                  </View>
+                ) : null}
+
+                <View style={styles.logoShell}>
+                  <Image
+                    source={{ uri: ensureAbsoluteUrl(store.logo) }}
+                    style={styles.logo}
+                    contentFit="cover"
+                  />
+                </View>
+              </LinearGradient>
+
+              <View style={styles.cardBody}>
+                <Text style={styles.shopName} numberOfLines={1}>
+                  {store.name}
                 </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ))}
+                <Text style={styles.tagline} numberOfLines={2}>
+                  {cleanDescription}
+                </Text>
+
+                <View style={styles.metaRow}>
+                  <View style={styles.metaChip}>
+                    <Ionicons name="cube-outline" size={13} color="#299e60" />
+                    <Text style={styles.metaText}>{store.total_products || 0} products</Text>
+                  </View>
+                  <View style={styles.metaChip}>
+                    <Ionicons name="star" size={13} color="#F59E0B" />
+                    <Text style={styles.metaText}>
+                      {(store.rating ?? 0) > 0 ? store.rating?.toFixed(1) : 'New'}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.buttonRow}>
+                  {store.isExclusive ? (
+                    <View style={styles.pickPill}>
+                      <Ionicons name="flash" size={13} color="#92400e" />
+                      <Text style={styles.pickPillText}>Top pick</Text>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={[styles.followButton, isFollowed ? styles.followingButton : styles.followButtonActive]}
+                      onPress={() => toggleFollow(store.id)}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={[styles.followText, isFollowed ? styles.followingText : null]}>
+                        {isFollowed ? 'Following' : 'Follow'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+
+                  <TouchableOpacity
+                    style={styles.visitButton}
+                    onPress={() => visitShop(store)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.visitText}>{store.isExclusive ? 'Explore' : 'Visit'}</Text>
+                    <Ionicons name="arrow-forward" size={14} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
     </View>
   );
@@ -157,135 +236,253 @@ export default function Vendors({ stores }: VendorsProps) {
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: 20,
-    paddingLeft: 16,
+    marginTop: 20,
+    marginBottom: 18,
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
-    paddingRight: 16,
-    marginBottom: 4,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    marginBottom: 14,
+  },
+  headerCopy: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  eyebrowRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 3,
+  },
+  eyebrow: {
+    color: '#299e60',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
   },
   title: {
+    color: '#12382b',
     fontSize: 22,
-    fontWeight: '800',
-    color: '#222',
+    fontWeight: '900',
   },
   subtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 12,
-  },
-  viewAll: {
-    fontSize: 14,
-    color: '#3B82F6',
+    color: '#6A7A70',
+    fontSize: 13,
     fontWeight: '600',
+    marginTop: 3,
   },
-  scroll: {
-    paddingVertical: 10,
+  viewAllPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#EAF8EF',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  viewAllText: {
+    color: '#299e60',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  scrollContent: {
+    paddingLeft: 16,
+    paddingRight: 8,
+    paddingBottom: 8,
   },
   card: {
-    width: 200,
-    borderRadius: 20,
-    backgroundColor: '#e6f9ef',
-    marginRight: 16,
-    padding: 16,
-    shadowColor: '#000',
+    width: 232,
+    backgroundColor: '#fff',
+    borderRadius: 28,
+    marginRight: 14,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E6EFE8',
+    shadowColor: '#12382b',
+    shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.1,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 6,
+    shadowRadius: 18,
+    elevation: 5,
+  },
+  exclusiveCard: {
+    borderColor: '#F8D77B',
+  },
+  cardHero: {
+    height: 114,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  heroOrbLarge: {
+    position: 'absolute',
+    width: 108,
+    height: 108,
+    borderRadius: 54,
+    right: -34,
+    top: -28,
+    backgroundColor: 'rgba(255,255,255,0.36)',
+  },
+  heroOrbSmall: {
+    position: 'absolute',
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    left: 18,
+    bottom: 16,
+    backgroundColor: 'rgba(255,255,255,0.34)',
+  },
+  exclusiveBadge: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.76)',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 999,
+  },
+  exclusiveBadgeText: {
+    color: '#92400e',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  verifiedBadge: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#299e60',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 999,
+  },
+  verifiedBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  logoShell: {
+    width: 78,
+    height: 78,
+    borderRadius: 26,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    padding: 6,
+    shadowColor: '#12382b',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
     elevation: 6,
   },
-  logoContainer: {
-    alignItems: 'center',
-    marginBottom: 10,
-  },
   logo: {
-    width: 80,
-    height: 80,
-    borderRadius: 12,
+    width: '100%',
+    height: '100%',
+    borderRadius: 21,
     backgroundColor: '#fff',
   },
+  cardBody: {
+    padding: 14,
+    paddingTop: 13,
+  },
   shopName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#222',
-    textAlign: 'center',
-    marginBottom: 4,
+    color: '#12382b',
+    fontSize: 17,
+    fontWeight: '900',
   },
   tagline: {
+    color: '#6A7A70',
     fontSize: 12,
-    color: '#444',
-    textAlign: 'center',
-    marginBottom: 12,
-    height: 32,
+    lineHeight: 18,
+    fontWeight: '600',
+    marginTop: 5,
+    minHeight: 36,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    gap: 7,
+    marginTop: 12,
+  },
+  metaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F3F8F1',
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+  },
+  metaText: {
+    color: '#53665b',
+    fontSize: 11,
+    fontWeight: '800',
   },
   buttonRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 14,
   },
   followButton: {
     flex: 1,
-    paddingVertical: 6,
-    borderRadius: 8,
+    height: 40,
+    borderRadius: 15,
     alignItems: 'center',
-    marginRight: 6,
+    justifyContent: 'center',
     borderWidth: 1,
   },
-  follow: {
-    backgroundColor: '#299e60',
-    borderColor: '#299e60',
+  followButtonActive: {
+    backgroundColor: '#EAF8EF',
+    borderColor: '#D3EDDD',
   },
-  following: {
+  followingButton: {
     backgroundColor: '#fff',
     borderColor: '#299e60',
   },
   followText: {
-    color: '#fff',
-    fontWeight: '600',
+    color: '#299e60',
     fontSize: 12,
+    fontWeight: '900',
+  },
+  followingText: {
+    color: '#12382b',
+  },
+  pickPill: {
+    flex: 1,
+    height: 40,
+    borderRadius: 15,
+    backgroundColor: '#FFF6DB',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    borderWidth: 1,
+    borderColor: '#F8D77B',
+  },
+  pickPillText: {
+    color: '#92400e',
+    fontSize: 12,
+    fontWeight: '900',
   },
   visitButton: {
-    flex: 1,
-    paddingVertical: 6,
-    borderRadius: 8,
+    height: 40,
+    minWidth: 78,
+    borderRadius: 15,
+    backgroundColor: '#299e60',
+    flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#299e60',
-    backgroundColor: '#fff',
+    justifyContent: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
   },
   visitText: {
-    color: '#299e60',
-    fontWeight: '600',
-    fontSize: 12,
-  },
-  exclusiveCard: {
-    backgroundColor: '#fffbeb',
-    borderWidth: 2,
-    borderColor: '#f59e0b',
-  },
-  exclusiveLabelRow: {
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  exclusiveLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#92400e',
-    letterSpacing: 0.5,
-  },
-  exclusiveShopName: {
-    color: '#92400e',
-  },
-  exclusiveVisitButton: {
-    flex: 1,
-    backgroundColor: '#f59e0b',
-    borderColor: '#f59e0b',
-  },
-  exclusiveVisitText: {
     color: '#fff',
-    fontWeight: '700',
     fontSize: 12,
+    fontWeight: '900',
   },
 });

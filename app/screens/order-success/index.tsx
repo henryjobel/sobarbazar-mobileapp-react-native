@@ -1,10 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef } from 'react';
-import { Animated, Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-const { width } = Dimensions.get('window');
 
 export default function OrderSuccessScreen() {
   const { orderId } = useLocalSearchParams<{ orderId: string }>();
@@ -35,7 +33,7 @@ export default function OrderSuccessScreen() {
         }),
       ]),
     ]).start();
-  }, []);
+  }, [fadeAnim, scaleAnim, slideAnim]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -328,3 +326,4 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
 });
+

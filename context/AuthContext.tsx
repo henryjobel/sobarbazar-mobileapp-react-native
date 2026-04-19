@@ -13,6 +13,8 @@ interface User {
   name?: string;
   avatar?: string;
   is_active?: boolean;
+  date_joined?: string;
+  is_email_verified?: boolean;
 }
 
 interface AuthTokens {
@@ -44,6 +46,7 @@ interface RegisterData {
 }
 
 interface AuthContextType extends AuthState {
+  token: string | null;
   login: (credentials: LoginCredentials) => Promise<{ success: boolean; error?: string }>;
   register: (data: RegisterData) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
@@ -57,6 +60,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // Storage Keys
 const TOKEN_KEY = 'auth_tokens';
 const USER_KEY = 'auth_user';
+const LEGACY_ACCESS_TOKEN_KEY = 'access_token';
+const LEGACY_USER_KEY = 'user';
 
 // Provider Component
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -93,8 +98,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             isAuthenticated: true,
             isLoading: false,
           });
-          // Update stored user with fresh data
-          await SecureStore.setItemAsync(USER_KEY, JSON.stringify(profile));
+          // Keep both the new auth keys and legacy keys in sync for older cart/order code.
+          await persistAuth(tokens, profile);
         } else {
           // Token invalid, clear storage
           await clearStorage();
@@ -124,6 +129,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await Promise.all([
       SecureStore.deleteItemAsync(TOKEN_KEY),
       SecureStore.deleteItemAsync(USER_KEY),
+      SecureStore.deleteItemAsync(LEGACY_ACCESS_TOKEN_KEY),
+      SecureStore.deleteItemAsync(LEGACY_USER_KEY),
+    ]);
+  };
+
+  const persistAuth = async (tokens: AuthTokens, user: User) => {
+    await Promise.all([
+      SecureStore.setItemAsync(TOKEN_KEY, JSON.stringify(tokens)),
+      SecureStore.setItemAsync(USER_KEY, JSON.stringify(user)),
+      SecureStore.setItemAsync(LEGACY_ACCESS_TOKEN_KEY, tokens.access),
+      SecureStore.setItemAsync(LEGACY_USER_KEY, JSON.stringify(user)),
+    ]);
+  };
+
+  const persistUser = async (user: User) => {
+    await Promise.all([
+      SecureStore.setItemAsync(USER_KEY, JSON.stringify(user)),
+      SecureStore.setItemAsync(LEGACY_USER_KEY, JSON.stringify(user)),
     ]);
   };
 
@@ -131,7 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setState(prev => ({ ...prev, isLoading: true }));
 
-      console.log('🔐 AuthContext: Attempting login for:', credentials.email);
+      __DEV__ && __DEV__ && console.log('🔐 AuthContext: Attempting login for:', credentials.email);
 
       let tokenResponse;
       try {
@@ -147,7 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error: 'Invalid email or password' };
       }
 
-      console.log('✅ AuthContext: Token received, fetching profile...');
+      __DEV__ && __DEV__ && console.log('✅ AuthContext: Token received, fetching profile...');
 
       const tokens: AuthTokens = {
         access: tokenResponse.access,
@@ -165,10 +188,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           email: credentials.email,
         };
 
-        await Promise.all([
-          SecureStore.setItemAsync(TOKEN_KEY, JSON.stringify(tokens)),
-          SecureStore.setItemAsync(USER_KEY, JSON.stringify(basicUser)),
-        ]);
+        await persistAuth(tokens, basicUser);
 
         setState({
           user: basicUser,
@@ -177,15 +197,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           isLoading: false,
         });
 
-        console.log('✅ AuthContext: Login successful (basic profile)');
+        __DEV__ && __DEV__ && console.log('✅ AuthContext: Login successful (basic profile)');
         return { success: true };
       }
 
       // Store tokens and user
-      await Promise.all([
-        SecureStore.setItemAsync(TOKEN_KEY, JSON.stringify(tokens)),
-        SecureStore.setItemAsync(USER_KEY, JSON.stringify(profile)),
-      ]);
+      await persistAuth(tokens, profile);
 
       setState({
         user: profile,
@@ -194,7 +211,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading: false,
       });
 
-      console.log('✅ AuthContext: Login successful with full profile');
+      __DEV__ && __DEV__ && console.log('✅ AuthContext: Login successful with full profile');
       return { success: true };
     } catch (error: any) {
       console.error('Login error:', error);
@@ -207,7 +224,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setState(prev => ({ ...prev, isLoading: true }));
 
-      console.log('📝 AuthContext: Attempting registration for:', data.email);
+      __DEV__ && __DEV__ && console.log('📝 AuthContext: Attempting registration for:', data.email);
 
       let response;
       try {
@@ -218,7 +235,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error: registerError.message || 'Registration failed' };
       }
 
-      console.log('📝 AuthContext: Registration response:', JSON.stringify(response).substring(0, 200));
+      __DEV__ && __DEV__ && console.log('📝 AuthContext: Registration response:', JSON.stringify(response).substring(0, 200));
 
       if (!response) {
         setState(prev => ({ ...prev, isLoading: false }));
@@ -227,7 +244,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // If registration auto-logs in, handle that
       if (response.access) {
-        console.log('✅ AuthContext: Auto-login tokens received');
+        __DEV__ && __DEV__ && console.log('✅ AuthContext: Auto-login tokens received');
         const tokens: AuthTokens = {
           access: response.access,
           refresh: response.refresh,
@@ -237,10 +254,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const profile = await getUserProfile(tokens.access);
 
         if (profile) {
-          await Promise.all([
-            SecureStore.setItemAsync(TOKEN_KEY, JSON.stringify(tokens)),
-            SecureStore.setItemAsync(USER_KEY, JSON.stringify(profile)),
-          ]);
+          await persistAuth(tokens, profile);
 
           setState({
             user: profile,
@@ -249,7 +263,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             isLoading: false,
           });
 
-          console.log('✅ AuthContext: Registration successful with full profile');
+          __DEV__ && __DEV__ && console.log('✅ AuthContext: Registration successful with full profile');
         } else {
           // Even if profile fetch fails, we have valid tokens
           const basicUser: User = {
@@ -258,10 +272,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             name: data.name || `${data.first_name || ''} ${data.last_name || ''}`.trim(),
           };
 
-          await Promise.all([
-            SecureStore.setItemAsync(TOKEN_KEY, JSON.stringify(tokens)),
-            SecureStore.setItemAsync(USER_KEY, JSON.stringify(basicUser)),
-          ]);
+          await persistAuth(tokens, basicUser);
 
           setState({
             user: basicUser,
@@ -270,7 +281,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             isLoading: false,
           });
 
-          console.log('✅ AuthContext: Registration successful with basic profile');
+          __DEV__ && __DEV__ && console.log('✅ AuthContext: Registration successful with basic profile');
         }
 
         return { success: true };
@@ -278,7 +289,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Registration successful but no auto-login (user needs to login manually)
       setState(prev => ({ ...prev, isLoading: false }));
-      console.log('✅ AuthContext: Registration successful, manual login required');
+      __DEV__ && __DEV__ && console.log('✅ AuthContext: Registration successful, manual login required');
       return { success: true };
     } catch (error: any) {
       console.error('Register error:', error);
@@ -309,7 +320,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error: 'Failed to update profile' };
       }
 
-      await SecureStore.setItemAsync(USER_KEY, JSON.stringify(updatedUser));
+      await persistUser(updatedUser);
 
       setState(prev => ({
         ...prev,
@@ -329,7 +340,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const profile = await getUserProfile(state.tokens.access);
       if (profile) {
-        await SecureStore.setItemAsync(USER_KEY, JSON.stringify(profile));
+        await persistUser(profile);
         setState(prev => ({ ...prev, user: profile }));
       }
     } catch (error) {
@@ -341,6 +352,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         ...state,
+        token: state.tokens?.access ?? null,
         login,
         register,
         logout,
@@ -360,10 +372,11 @@ export function useAuth() {
   // Return a safe fallback if context is not available
   // This prevents errors when component is used outside provider
   if (context === undefined) {
-    console.warn('useAuth: Context not available, using fallback');
+    __DEV__ && console.warn('useAuth: Context not available, using fallback');
     return {
       user: null,
       tokens: null,
+      token: null,
       isAuthenticated: false,
       isLoading: false,
       login: async () => ({ success: false, error: 'Context not available' }),

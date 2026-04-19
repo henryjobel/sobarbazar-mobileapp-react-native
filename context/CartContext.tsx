@@ -12,6 +12,7 @@ import {
   createOrder as apiCreateOrder,
   addDropshippingToCart as apiAddDropshipping,
   removeDropshippingFromCart as apiRemoveDropshipping,
+  getProductById,
 } from '@/utils/api';
 import { getUserData } from '@/hooks/useUser';
 import GuestCheckoutModal from '@/components/ui/GuestCheckoutModal';
@@ -91,7 +92,7 @@ interface OrderData {
   notes?: string;
 }
 
-interface DropshippingItem {
+export interface DropshippingItem {
   id: number;
   droploo_product_id: number;
   droploo_image_id: number;
@@ -133,6 +134,143 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 // Storage Keys
 const CART_ID_KEY = 'cart_id';
 const GUEST_MODE_KEY = 'guest_mode';
+const CART_PRODUCT_CACHE_KEY = 'cart_product_details';
+
+const isObjectRecord = (value: unknown): value is Record<string, any> =>
+  !!value && typeof value === 'object' && !Array.isArray(value);
+
+const firstNonEmptyText = (...values: unknown[]): string | undefined => {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+  }
+  return undefined;
+};
+
+const getProductIdFromCartItem = (item: any): number | null => {
+  const candidates = [
+    item?.product_id,
+    item?.product,
+    item?.product?.id,
+    item?.variant?.product_id,
+    item?.variant?.product,
+    item?.variant?.product?.id,
+  ];
+
+  for (const candidate of candidates) {
+    const parsed = typeof candidate === 'string' ? Number(candidate) : candidate;
+    if (typeof parsed === 'number' && Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return null;
+};
+
+const getVariantIdFromCartItem = (item: any): number | null => {
+  const candidates = [item?.variant_id, item?.variant?.id];
+
+  for (const candidate of candidates) {
+    const parsed = typeof candidate === 'string' ? Number(candidate) : candidate;
+    if (typeof parsed === 'number' && Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return null;
+};
+
+const getProductImageFromProduct = (product: any): string | undefined => {
+  if (!isObjectRecord(product)) return undefined;
+
+  const firstImage =
+    Array.isArray(product.images) && product.images.length > 0
+      ? firstNonEmptyText(product.images[0]?.image, product.images[0]?.image_url, product.images[0]?.url)
+      : undefined;
+
+  return firstNonEmptyText(
+    product.image,
+    product.feature_image,
+    product.thumbnail,
+    product.image_url,
+    product.product_image,
+    product.product_image_url,
+    firstImage,
+  );
+};
+
+const loadCartProductCache = async (): Promise<Record<string, any>> => {
+  try {
+    const cached = await SecureStore.getItemAsync(CART_PRODUCT_CACHE_KEY);
+    return cached ? JSON.parse(cached) : {};
+  } catch (error) {
+    console.error('Error loading cart product cache:', error);
+    return {};
+  }
+};
+
+const cacheCartProductDetails = async (variantId: number, product: any) => {
+  if (!variantId || !product) return;
+
+  try {
+    const cache = await loadCartProductCache();
+    cache[String(variantId)] = {
+      id: product.id,
+      name: firstNonEmptyText(product.name, product.title),
+      title: product.title,
+      image: getProductImageFromProduct(product),
+      images: product.images,
+      feature_image: product.feature_image,
+    };
+    await SecureStore.setItemAsync(CART_PRODUCT_CACHE_KEY, JSON.stringify(cache));
+  } catch (error) {
+    console.error('Error saving cart product cache:', error);
+  }
+};
+
+const enrichCartItemsWithProductDetails = async (cartData: any) => {
+  if (!cartData?.items?.length) return cartData;
+
+  const productCache = new Map<number, any>();
+  const localProductCache = await loadCartProductCache();
+
+  const items = await Promise.all(
+    cartData.items.map(async (item: any) => {
+      const variantId = getVariantIdFromCartItem(item);
+      const existingProduct = isObjectRecord(item.product)
+        ? item.product
+        : isObjectRecord(item.variant?.product)
+          ? item.variant.product
+          : null;
+
+      const productId = getProductIdFromCartItem(item) || existingProduct?.id || null;
+      let product = existingProduct || (variantId ? localProductCache[String(variantId)] : null);
+
+      if (!product && productId) {
+        if (!productCache.has(productId)) {
+          productCache.set(productId, await getProductById(productId));
+        }
+        product = productCache.get(productId);
+      }
+
+      if (!product) return item;
+
+      const productName = firstNonEmptyText(product.name, product.title, item.product_name);
+      const productImage = firstNonEmptyText(getProductImageFromProduct(product), item.product_image);
+
+      return {
+        ...item,
+        product,
+        product_id: productId || product.id || item.product_id,
+        product_name: productName,
+        product_image: productImage,
+      };
+    }),
+  );
+
+  return { ...cartData, items };
+};
 
 // Provider Component
 export function CartProvider({ children }: { children: ReactNode }) {
@@ -178,19 +316,20 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const initializeCart = useCallback(async () => {
     try {
       setIsLoading(true);
-      console.log('🛒 CartContext: Initializing cart...');
+      __DEV__ && __DEV__ && console.log('🛒 CartContext: Initializing cart...');
 
       // Check for stored cart ID
       const storedCartId = await SecureStore.getItemAsync(CART_ID_KEY);
 
       if (storedCartId) {
-        console.log('🛒 CartContext: Found stored cart ID:', storedCartId);
+        __DEV__ && __DEV__ && console.log('🛒 CartContext: Found stored cart ID:', storedCartId);
         // Try to fetch the existing cart
         const existingCart = await getCart(storedCartId);
 
         if (existingCart && existingCart.id) {
-          console.log('✅ CartContext: Loaded existing cart with', existingCart.items?.length || 0, 'items');
-          setCart(existingCart);
+          __DEV__ && __DEV__ && console.log('✅ CartContext: Loaded existing cart with', existingCart.items?.length || 0, 'items');
+          const enrichedCart = await enrichCartItemsWithProductDetails(existingCart);
+          setCart(enrichedCart);
           setCartId(existingCart.id);
           // Sync dropshipping items
           if (Array.isArray(existingCart.dropshipping_items)) {
@@ -213,16 +352,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
       }
 
       // No valid stored cart, create or get a new one
-      console.log('🛒 CartContext: Getting or creating new cart...');
+      __DEV__ && __DEV__ && console.log('🛒 CartContext: Getting or creating new cart...');
       const newCart = await getOrCreateCart();
 
       if (newCart && newCart.id) {
-        console.log('✅ CartContext: Got cart:', newCart.id);
+        __DEV__ && __DEV__ && console.log('✅ CartContext: Got cart:', newCart.id);
         await SecureStore.setItemAsync(CART_ID_KEY, newCart.id);
-        setCart(newCart);
+        const enrichedCart = await enrichCartItemsWithProductDetails(newCart);
+        setCart(enrichedCart);
         setCartId(newCart.id);
       } else {
-        console.log('⚠️ CartContext: Could not get/create cart');
+        __DEV__ && __DEV__ && console.log('⚠️ CartContext: Could not get/create cart');
       }
     } catch (error) {
       console.error('❌ CartContext: Initialize error:', error);
@@ -239,13 +379,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     try {
       setIsLoading(true);
-      console.log('🔄 CartContext: Refreshing cart:', cartId);
+      __DEV__ && __DEV__ && console.log('🔄 CartContext: Refreshing cart:', cartId);
 
       const updatedCart = await getCart(cartId);
 
       if (updatedCart && updatedCart.id) {
-        console.log('✅ CartContext: Cart refreshed with', updatedCart.items?.length || 0, 'items');
-        setCart(updatedCart);
+        __DEV__ && __DEV__ && console.log('✅ CartContext: Cart refreshed with', updatedCart.items?.length || 0, 'items');
+        const enrichedCart = await enrichCartItemsWithProductDetails(updatedCart);
+        setCart(enrichedCart);
         // Sync dropshipping items from backend
         if (Array.isArray(updatedCart.dropshipping_items)) {
           const mapped = updatedCart.dropshipping_items.map((d: any) => ({
@@ -274,7 +415,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     // Check if user is authenticated or in guest mode
     const user = await getUserData();
     if (!user && !isGuestMode) {
-      console.log('🔒 CartContext: User not authenticated, showing guest modal...');
+      __DEV__ && __DEV__ && console.log('🔒 CartContext: User not authenticated, showing guest modal...');
       setPendingAddItem({ product, quantity, variant });
       setShowGuestModal(true);
       return false;
@@ -282,16 +423,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     try {
       setIsLoading(true);
-      console.log('➕ CartContext: Adding item to cart...');
+      __DEV__ && __DEV__ && console.log('➕ CartContext: Adding item to cart...');
 
       // Ensure we have a cart
       let currentCartId = cartId;
       if (!currentCartId) {
-        console.log('🛒 CartContext: No cart, creating one...');
+        __DEV__ && __DEV__ && console.log('🛒 CartContext: No cart, creating one...');
         const newCart = await getOrCreateCart();
         if (newCart && newCart.id) {
           await SecureStore.setItemAsync(CART_ID_KEY, newCart.id);
-          setCart(newCart);
+          const enrichedCart = await enrichCartItemsWithProductDetails(newCart);
+          setCart(enrichedCart);
           setCartId(newCart.id);
           currentCartId = newCart.id;
         } else {
@@ -318,12 +460,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
         return false;
       }
 
-      console.log('➕ CartContext: Adding variant', variantId, 'to cart', currentCartId);
+      __DEV__ && __DEV__ && console.log('➕ CartContext: Adding variant', variantId, 'to cart', currentCartId);
 
       const result = await apiAddToCart(currentCartId, variantId, quantity);
 
       if (result.success) {
-        console.log('✅ CartContext: Item added successfully');
+        __DEV__ && __DEV__ && console.log('✅ CartContext: Item added successfully');
+        await cacheCartProductDetails(variantId, product);
         await refreshCart();
         return true;
       } else {
@@ -343,12 +486,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     try {
       setIsLoading(true);
-      console.log('✏️ CartContext: Updating item', itemId, 'quantity to', quantity);
+      __DEV__ && __DEV__ && console.log('✏️ CartContext: Updating item', itemId, 'quantity to', quantity);
 
       const result = await apiUpdateCartItem(cartId, itemId, quantity);
 
       if (result.success) {
-        console.log('✅ CartContext: Quantity updated');
+        __DEV__ && __DEV__ && console.log('✅ CartContext: Quantity updated');
         await refreshCart();
         return true;
       } else {
@@ -368,12 +511,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     try {
       setIsLoading(true);
-      console.log('🗑️ CartContext: Removing item', itemId);
+      __DEV__ && __DEV__ && console.log('🗑️ CartContext: Removing item', itemId);
 
       const result = await apiRemoveFromCart(cartId, itemId);
 
       if (result.success) {
-        console.log('✅ CartContext: Item removed');
+        __DEV__ && __DEV__ && console.log('✅ CartContext: Item removed');
         await refreshCart();
         return true;
       } else {
@@ -393,7 +536,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     try {
       setIsLoading(true);
-      console.log('🗑️ CartContext: Clearing cart');
+      __DEV__ && __DEV__ && console.log('🗑️ CartContext: Clearing cart');
 
       await apiClearCart(cartId);
 
@@ -401,7 +544,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
       const newCart = await createCart();
       if (newCart && newCart.id) {
         await SecureStore.setItemAsync(CART_ID_KEY, newCart.id);
-        setCart(newCart);
+        const enrichedCart = await enrichCartItemsWithProductDetails(newCart);
+        setCart(enrichedCart);
         setCartId(newCart.id);
       }
     } catch (error) {
@@ -437,14 +581,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
         const newCart = await getOrCreateCart();
         if (newCart && newCart.id) {
           await SecureStore.setItemAsync(CART_ID_KEY, newCart.id);
-          setCart(newCart);
+          const enrichedCart = await enrichCartItemsWithProductDetails(newCart);
+          setCart(enrichedCart);
           setCartId(newCart.id);
           currentCartId = newCart.id;
         } else return false;
       }
 
       const token = await SecureStore.getItemAsync('access_token');
-      const result = await apiAddDropshipping(currentCartId, token, {
+      const result = await apiAddDropshipping(currentCartId, (token || null) as any, {
         productId: params.productId,
         droplooImageId: params.droplooImageId,
         size: params.size || '',
@@ -472,7 +617,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     try {
       setIsLoading(true);
       const token = await SecureStore.getItemAsync('access_token');
-      const result = await apiRemoveDropshipping(cartId, token, itemId);
+      const result = await apiRemoveDropshipping(cartId, (token || null) as any, itemId);
       if (result.success) {
         setDropshippingItems(prev => prev.filter(item => item.id !== itemId));
         return true;
@@ -491,13 +636,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
       return { success: false, error: 'No cart found' };
     }
 
-    if (!cart?.items || cart.items.length === 0) {
+    if ((!cart?.items || cart.items.length === 0) && dropshippingItems.length === 0) {
       return { success: false, error: 'Cart is empty' };
     }
 
     try {
       setIsLoading(true);
-      console.log('📦 CartContext: Creating order...');
+      __DEV__ && __DEV__ && console.log('📦 CartContext: Creating order...');
 
       // Get user authentication token
       const token = await SecureStore.getItemAsync('access_token');
@@ -527,13 +672,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      console.log('📦 CartContext: Order payload:', orderPayload);
-      console.log('📦 CartContext: Is authenticated:', isAuthenticated);
+      __DEV__ && __DEV__ && console.log('📦 CartContext: Order payload:', orderPayload);
+      __DEV__ && __DEV__ && console.log('📦 CartContext: Is authenticated:', isAuthenticated);
 
-      const result = await apiCreateOrder(orderPayload, token);
+      const result = await apiCreateOrder(orderPayload, (token || null) as any);
 
       if (result.success) {
-        console.log('✅ CartContext: Order created successfully');
+        __DEV__ && __DEV__ && console.log('✅ CartContext: Order created successfully');
 
         // If online payment, return payment URL
         if (result.payment_url) {
@@ -550,7 +695,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
         const newCart = await createCart();
         if (newCart && newCart.id) {
           await SecureStore.setItemAsync(CART_ID_KEY, newCart.id);
-          setCart(newCart);
+          const enrichedCart = await enrichCartItemsWithProductDetails(newCart);
+          setCart(enrichedCart);
           setCartId(newCart.id);
         }
 
@@ -565,7 +711,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [cartId, cart]);
+  }, [cartId, cart, dropshippingItems.length]);
 
   const handleContinueAsGuest = useCallback(async () => {
     // Set guest mode
@@ -591,7 +737,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     // Simply close the modal
     // User should navigate to Profile tab and tap Login manually
     // This avoids navigation context issues since modal is outside nav tree
-    console.log('💡 Please go to Profile tab to login');
+    __DEV__ && __DEV__ && console.log('💡 Please go to Profile tab to login');
     // Clear pending item since user chose to login instead
     setPendingAddItem(null);
   }, []);
@@ -639,7 +785,7 @@ export function useCart() {
   // Return a safe fallback if context is not available
   // This prevents errors when component is used outside provider
   if (context === undefined) {
-    console.warn('useCart: Context not available, using fallback');
+    __DEV__ && console.warn('useCart: Context not available, using fallback');
     return {
       cart: null,
       cartId: null,
@@ -658,12 +804,15 @@ export function useCart() {
       refreshCart: async () => {},
       setShippingArea: () => {},
       initializeCart: async () => {},
-      dropshippingItems: [] as import('./CartContext').DropshippingItem[] extends never ? any[] : any[],
+      dropshippingItems: [],
       addDropshippingItem: async () => false,
-      removeDropshippingItem: async () => {},
+      removeDropshippingItem: async () => false,
     } as CartContextType;
   }
   return context;
 }
 
 export default CartContext;
+
+
+

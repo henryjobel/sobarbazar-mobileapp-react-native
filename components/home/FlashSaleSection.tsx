@@ -4,7 +4,6 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   Animated,
-  Dimensions,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,8 +12,6 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useCart } from '../../context/CartContext';
-
-const { width } = Dimensions.get('window');
 
 interface Product {
   id: number;
@@ -64,11 +61,6 @@ const FlashSaleSection: React.FC<FlashSaleSectionProps> = ({
   // Use products with discounts, or show first 10 products if no discounts
   const displayProducts = products.length > 0 ? products : (allProducts || []).slice(0, 10);
 
-  // If no products to show, don't render the section
-  if (displayProducts.length === 0) {
-    return null;
-  }
-
   // Get countdown end time from banner or use default 24 hours
   useEffect(() => {
     let endTime: Date;
@@ -108,7 +100,12 @@ const FlashSaleSection: React.FC<FlashSaleSectionProps> = ({
       duration: 1000,
       useNativeDriver: false,
     }).start();
-  }, []);
+  }, [progressAnim]);
+
+  // If no products to show, don't render the section.
+  if (displayProducts.length === 0) {
+    return null;
+  }
 
   const handleProductPress = (product: Product & { is_exclusive?: boolean; exclusive_id?: number }) => {
     if (product.is_exclusive) {
@@ -540,3 +537,4 @@ const styles = StyleSheet.create({
 });
 
 export default FlashSaleSection;
+

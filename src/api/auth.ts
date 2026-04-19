@@ -4,10 +4,6 @@
  */
 
 import { apiClient } from './client';
-import Constants from 'expo-constants';
-
-const AUTH_URL = Constants.expoConfig?.extra?.authApiUrl || 'https://api.hetdcl.com';
-
 export interface AuthTokens {
   access: string;
   refresh?: string;
@@ -167,3 +163,4 @@ export async function updateUserProfile(
 
   return response.success ? response.data || null : null;
 }
+

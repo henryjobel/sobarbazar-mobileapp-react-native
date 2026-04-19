@@ -7,7 +7,6 @@ import Header from '@/components/home/header';
 import NewArrivalsSection from '@/components/home/NewArrivalsSection';
 import Product from '@/components/home/Products';
 import RakamariSection from '@/components/home/RakamariSection';
-import SubHeader from '@/components/home/SubHeader';
 import Vendors from '@/components/home/vendors';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, StatusBar, View, Text, TouchableOpacity } from 'react-native';
@@ -121,7 +120,6 @@ export default function HomeScreen() {
     <SafeAreaView className="flex-1 bg-gray-50">
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
       <Header />
-      <SubHeader />
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={

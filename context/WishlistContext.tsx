@@ -213,7 +213,7 @@ export function useWishlist() {
   // Return a safe fallback if context is not available
   // This prevents errors when component is used outside provider
   if (context === undefined) {
-    console.warn('useWishlist: Context not available, using fallback');
+    __DEV__ && console.warn('useWishlist: Context not available, using fallback');
     return {
       items: [],
       isLoading: false,

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
     Dimensions,
     FlatList,
@@ -27,42 +27,81 @@ interface BannerProps {
 export default function BigSaleBanner({ banners }: BannerProps) {
   const [activeIndex, setActiveIndex] = useState(0)
   const flatListRef = useRef<FlatList>(null)
+  const displayBanners = banners && banners.length > 0 ? banners : BANNER_IMAGES
+  const bannerCount = displayBanners.length
+
+  const ensureAbsoluteUrl = (url: string) => {
+    if (url.startsWith('http://') || url.startsWith('https://')) return url
+    return `https://api.hetdcl.com${url.startsWith('/') ? '' : '/'}${url}`
+  }
+
+  const getBannerSource = (item: any) => {
+    if (typeof item === 'number') return item
+    if (typeof item === 'string') return { uri: ensureAbsoluteUrl(item) }
+
+    const imageUrl =
+      item?.image ||
+      item?.image_url ||
+      item?.banner ||
+      item?.mobile_image ||
+      item?.desktop_image
+
+    return imageUrl ? { uri: ensureAbsoluteUrl(String(imageUrl)) } : BANNER_IMAGES[0]
+  }
   
+  useEffect(() => {
+    if (activeIndex >= bannerCount) {
+      setActiveIndex(0)
+    }
+  }, [activeIndex, bannerCount])
+
+  const scrollToBanner = useCallback((index: number) => {
+    if (!flatListRef.current || bannerCount === 0) return
+
+    const safeIndex = Math.max(0, Math.min(index, bannerCount - 1))
+    try {
+      flatListRef.current.scrollToIndex({
+        index: safeIndex,
+        animated: true,
+      })
+    } catch {
+      flatListRef.current.scrollToOffset({
+        offset: safeIndex * (screenWidth - 32),
+        animated: true,
+      })
+    }
+  }, [bannerCount])
+
   // Auto slide functionality
   useEffect(() => {
+    if (bannerCount <= 1) return
+
     const interval = setInterval(() => {
-      if (activeIndex === BANNER_IMAGES.length - 1) {
-        flatListRef.current?.scrollToIndex({
-          index: 0,
-          animated: true,
-        })
-        setActiveIndex(0)
-      } else {
-        flatListRef.current?.scrollToIndex({
-          index: activeIndex + 1,
-          animated: true,
-        })
-        setActiveIndex(prev => prev + 1)
-      }
+      const safeActiveIndex = activeIndex >= bannerCount ? 0 : activeIndex
+      const nextIndex = safeActiveIndex === bannerCount - 1 ? 0 : safeActiveIndex + 1
+      scrollToBanner(nextIndex)
+      setActiveIndex(nextIndex)
     }, 3000) // Change slide every 3 seconds
 
     return () => clearInterval(interval)
-  }, [activeIndex])
+  }, [activeIndex, bannerCount, scrollToBanner])
 
   const handleScroll = (event: any) => {
     const slideSize = event.nativeEvent.layoutMeasurement.width
     const scrollPosition = event.nativeEvent.contentOffset.x
     const index = Math.round(scrollPosition / slideSize)
-    setActiveIndex(index)
+    if (bannerCount > 0) {
+      setActiveIndex(Math.max(0, Math.min(index, bannerCount - 1)))
+    }
   }
 
   const renderItem = ({ item, index }: { item: any; index: number }) => (
     <TouchableOpacity
       activeOpacity={0.9}
-      onPress={() => console.log(`Banner ${index + 1} pressed`)}
+      onPress={() => __DEV__ && __DEV__ && console.log(`Banner ${index + 1} pressed`)}
     >
       <Image
-        source={item}
+        source={getBannerSource(item)}
         style={styles.bannerImage}
         resizeMode="cover"
       />
@@ -71,7 +110,7 @@ export default function BigSaleBanner({ banners }: BannerProps) {
 
   const renderPagination = () => (
     <View style={styles.paginationContainer}>
-      {BANNER_IMAGES.map((_, index) => (
+      {displayBanners.map((_, index) => (
         <View
           key={index}
           style={[
@@ -87,15 +126,18 @@ export default function BigSaleBanner({ banners }: BannerProps) {
     <View style={styles.container}>
       <FlatList
         ref={flatListRef}
-        data={BANNER_IMAGES}
+        data={displayBanners}
         renderItem={renderItem}
         keyExtractor={(item, index) => index.toString()}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         onScroll={handleScroll}
+        onScrollToIndexFailed={(info) => {
+          scrollToBanner(Math.min(info.index, bannerCount - 1))
+        }}
         scrollEventThrottle={16}
-        snapToInterval={screenWidth}
+        snapToInterval={screenWidth - 32}
         decelerationRate="fast"
       />
       

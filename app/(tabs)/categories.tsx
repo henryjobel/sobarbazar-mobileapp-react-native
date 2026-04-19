@@ -35,9 +35,9 @@ export default function CategoriesScreen() {
 
   const fetchCategories = useCallback(async () => {
     try {
-      console.log('📂 Categories: Fetching categories');
+      __DEV__ && __DEV__ && console.log('📂 Categories: Fetching categories');
       const data = await getCategories();
-      console.log('📂 Categories: Got', data?.length || 0, 'categories');
+      __DEV__ && __DEV__ && console.log('📂 Categories: Got', data?.length || 0, 'categories');
       // Ensure we have an array
       const categoriesArray = Array.isArray(data) ? data : [];
       setCategories(categoriesArray);
@@ -128,7 +128,7 @@ export default function CategoriesScreen() {
           {/* All products in category */}
           <TouchableOpacity
             className="bg-main-600 rounded-2xl p-4 mb-4 flex-row items-center"
-            onPress={() => router.push(`/screens/shop?category=${selectedCategory.id}&name=${encodeURIComponent(selectedCategory.name)}`)}
+            onPress={() => router.push(`/(tabs)/shop?category=${selectedCategory.id}&name=${encodeURIComponent(selectedCategory.name)}`)}
             activeOpacity={0.8}
           >
             <View className="w-12 h-12 bg-white/20 rounded-xl items-center justify-center">
@@ -214,7 +214,7 @@ export default function CategoriesScreen() {
         {/* Featured Category Banner */}
         <TouchableOpacity
           className="mx-4 mt-4 bg-gradient-to-r from-main-600 to-emerald-600 rounded-2xl overflow-hidden"
-          onPress={() => router.push('/screens/shop')}
+          onPress={() => router.push('/(tabs)/shop')}
           activeOpacity={0.9}
         >
           <View className="bg-main-600 p-5 flex-row items-center">
@@ -305,3 +305,4 @@ export default function CategoriesScreen() {
     </SafeAreaView>
   );
 }
+

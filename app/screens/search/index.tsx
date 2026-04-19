@@ -82,6 +82,8 @@ export default function SearchScreen() {
     if (searchQuery || selectedCategory) {
       performSearch(true);
     }
+    // Search text is submitted manually; filters trigger automatic refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCategory, selectedSort]);
 
   const fetchCategories = async () => {
@@ -129,7 +131,7 @@ export default function SearchScreen() {
       setIsLoading(false);
       setIsLoadingMore(false);
     }
-  }, [searchQuery, selectedCategory, selectedSort, page, recentSearches]);
+  }, [searchQuery, selectedCategory, page, recentSearches]);
 
   const handleSearch = () => {
     if (searchQuery.trim()) {
@@ -143,6 +145,8 @@ export default function SearchScreen() {
       performSearch(false);
     }
   };
+
+  const isFilterActive = Boolean(selectedCategory || selectedSort !== 'relevance');
 
   const handleClearFilters = () => {
     setSelectedCategory(null);
@@ -319,13 +323,13 @@ export default function SearchScreen() {
         </View>
 
         <TouchableOpacity
-          style={[styles.filterButton, (selectedCategory || selectedSort !== 'relevance') && styles.filterButtonActive]}
+          style={[styles.filterButton, isFilterActive && styles.filterButtonActive]}
           onPress={() => setShowFilters(true)}
         >
           <Ionicons
             name="options-outline"
             size={22}
-            color={(selectedCategory || selectedSort !== 'relevance') ? '#fff' : '#6B7280'}
+            color={isFilterActive ? '#fff' : '#6B7280'}
           />
         </TouchableOpacity>
       </View>

@@ -2,7 +2,6 @@ import { Categories } from '@/data/Categories';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import {
-  Dimensions,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,8 +9,6 @@ import {
   View,
 } from 'react-native';
 import { Image } from 'expo-image';
-
-const { width } = Dimensions.get('window');
 
 interface CategoryItem {
   id: number | string;

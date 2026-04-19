@@ -1,26 +1,40 @@
-import 'dotenv/config';
+require('dotenv/config');
 
-export default {
-  expo: {
-    name: "sobarbazar",
-    slug: "sobarbazar",
-    owner: "jobelhenry",
-    version: "1.0.0",
+const appJson = require('./app.json');
 
-    android: {
-      package: "com.jobelhenry.sobarbazar",
-    },
+module.exports = ({ config }) => {
+  const expo = appJson.expo || {};
 
+  return {
+    ...config,
+    ...expo,
+    name: expo.name || 'SobarBazarBD',
+    slug: expo.slug || 'sobarbazar',
+    owner: 'jobelhenry',
+    version: expo.version || '1.0.1',
     ios: {
-      bundleIdentifier: "com.jobelhenry.sobarbazar",
+      ...(expo.ios || {}),
+      bundleIdentifier: 'com.jobelhenry.sobarbazar',
     },
-
+    android: {
+      ...(expo.android || {}),
+      package: 'com.jobelhenry.sobarbazar',
+    },
+    updates: {
+      ...(expo.updates || {}),
+      url: 'https://u.expo.dev/21e106b5-70ee-4a5c-bf25-9cf92472c8bb',
+    },
+    runtimeVersion: expo.runtimeVersion || {
+      policy: 'appVersion',
+    },
     extra: {
-      apiUrl: process.env.API_URL || "https://api.hetdcl.com",
-      authApiUrl: process.env.AUTH_API_URL || "https://api.hetdcl.com",
+      ...(expo.extra || {}),
+      apiUrl: process.env.API_URL || 'https://api.hetdcl.com',
+      authApiUrl: process.env.AUTH_API_URL || 'https://api.hetdcl.com',
       eas: {
-        projectId: "21e106b5-70ee-4a5c-bf25-9cf92472c8bb",
+        ...(expo.extra?.eas || {}),
+        projectId: '21e106b5-70ee-4a5c-bf25-9cf92472c8bb',
       },
     },
-  },
+  };
 };

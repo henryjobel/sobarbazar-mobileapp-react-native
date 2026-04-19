@@ -1,13 +1,25 @@
 import { Ionicons } from '@expo/vector-icons'
+import Constants from 'expo-constants'
 import { router, useRouter } from 'expo-router'
-import { StatusBar } from 'expo-status-bar'
 import React from 'react'
-import { Image, ScrollView, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native'
+import { Image, ScrollView, Text, TouchableOpacity, View, ActivityIndicator, StatusBar } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuth } from '@/context/AuthContext'
+import { useWishlist } from '@/context/WishlistContext'
+
+type ProfileMenuItem = {
+  id: string;
+  title: string;
+  subtitle: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  iconColor: string;
+  iconBg: string;
+  section: 'quick' | 'account' | 'support';
+  onPress: () => void;
+};
 
 // Menu Items Array
-const menuItems = [
+const menuItems: ProfileMenuItem[] = [
   // Quick Actions
   {
     id: "orders",
@@ -27,7 +39,7 @@ const menuItems = [
     iconColor: "#EF4444",
     iconBg: "#FEE2E2",
     section: "quick",
-    onPress: () => router.push('/wishlist')
+    onPress: () => router.push('/(tabs)/wishlist')
   },
   {
     id: "addresses",
@@ -119,6 +131,19 @@ const menuItems = [
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, isAuthenticated, isLoading, logout } = useAuth();
+  const { itemCount: wishlistCount } = useWishlist();
+  const profileStats = {
+    orders: (user as any)?.orders_count ?? (user as any)?.total_orders ?? 0,
+    wishlist: wishlistCount,
+    status: user?.is_email_verified ? 'Verified' : 'Active',
+    coupons: (user as any)?.coupon_count ?? 0,
+  };
+  const appVersion = Constants.expoConfig?.version || '1.0.1';
+  const appLastUpdated = (Constants.expoConfig?.extra as any)?.lastUpdated || 'Current build';
+  const buildNumber =
+    Constants.expoConfig?.ios?.buildNumber ||
+    (Constants.expoConfig?.android as any)?.versionCode?.toString() ||
+    '1';
 
   // Filter items by section
   const quickActions = menuItems.filter(item => item.section === "quick");
@@ -244,19 +269,19 @@ export default function ProfileScreen() {
             {/* Stats Row */}
             <View className='flex-row justify-between border-t border-gray-100 pt-4'>
               <View className='items-center'>
-                <Text className='text-2xl font-bold text-gray-800'>12</Text>
+                <Text className='text-2xl font-bold text-gray-800'>{profileStats.orders}</Text>
                 <Text className='text-gray-500 text-sm'>Orders</Text>
               </View>
               <View className='items-center'>
-                <Text className='text-2xl font-bold text-gray-800'>8</Text>
+                <Text className='text-2xl font-bold text-gray-800'>{profileStats.wishlist}</Text>
                 <Text className='text-gray-500 text-sm'>Wishlist</Text>
               </View>
               <View className='items-center'>
-                <Text className='text-2xl font-bold text-gray-800'>4.8</Text>
-                <Text className='text-gray-500 text-sm'>Rating</Text>
+                <Text className='text-2xl font-bold text-gray-800'>{profileStats.status}</Text>
+                <Text className='text-gray-500 text-sm'>Status</Text>
               </View>
               <View className='items-center'>
-                <Text className='text-2xl font-bold text-gray-800'>2</Text>
+                <Text className='text-2xl font-bold text-gray-800'>{profileStats.coupons}</Text>
                 <Text className='text-gray-500 text-sm'>Coupons</Text>
               </View>
             </View>
@@ -350,15 +375,15 @@ export default function ProfileScreen() {
             <View className='space-y-4'>
               <View className='flex-row justify-between items-center'>
                 <Text className='text-gray-600'>App Version</Text>
-                <Text className='text-gray-800 font-medium'>1.0.0</Text>
+                <Text className='text-gray-800 font-medium'>{appVersion}</Text>
               </View>
               <View className='flex-row justify-between items-center'>
                 <Text className='text-gray-600'>Last Updated</Text>
-                <Text className='text-gray-800 font-medium'>Dec 2024</Text>
+                <Text className='text-gray-800 font-medium'>{appLastUpdated}</Text>
               </View>
               <View className='flex-row justify-between items-center'>
                 <Text className='text-gray-600'>Build Number</Text>
-                <Text className='text-gray-800 font-medium'>245</Text>
+                <Text className='text-gray-800 font-medium'>{buildNumber}</Text>
               </View>
             </View>
           </View>

@@ -20,7 +20,7 @@ import { useAuth } from '../../../context';
 
 export default function PersonalInfoScreen() {
   const router = useRouter();
-  const { user, token, isAuthenticated, updateProfile } = useAuth();
+  const { user, isAuthenticated, updateProfile } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -638,3 +638,4 @@ const styles = StyleSheet.create({
     height: 32,
   },
 });
+
