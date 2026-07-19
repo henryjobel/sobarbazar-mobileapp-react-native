@@ -4,6 +4,7 @@ const appJson = require('./app.json');
 
 module.exports = ({ config }) => {
   const expo = appJson.expo || {};
+  const apiUrl = process.env.API_URL || 'https://api.hetdcl.com';
 
   return {
     ...config,
@@ -29,8 +30,9 @@ module.exports = ({ config }) => {
     },
     extra: {
       ...(expo.extra || {}),
-      apiUrl: process.env.API_URL || 'https://api.hetdcl.com',
+      apiUrl,
       authApiUrl: process.env.AUTH_API_URL || 'https://api.hetdcl.com',
+      metaPurchaseEndpoint: process.env.META_PURCHASE_ENDPOINT || '',
       eas: {
         ...(expo.extra?.eas || {}),
         projectId: '21e106b5-70ee-4a5c-bf25-9cf92472c8bb',

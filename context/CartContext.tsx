@@ -16,6 +16,10 @@ import {
 } from '@/utils/api';
 import { getUserData } from '@/hooks/useUser';
 import GuestCheckoutModal from '@/components/ui/GuestCheckoutModal';
+import {
+  buildMetaPurchasePayload,
+  sendMetaPurchaseEvent,
+} from '@/utils/metaPurchaseTracking';
 
 // Types matching backend structure
 interface ProductVariant {
@@ -680,6 +684,31 @@ export function CartProvider({ children }: { children: ReactNode }) {
       if (result.success) {
         __DEV__ && __DEV__ && console.log('✅ CartContext: Order created successfully');
 
+        const orderId =
+          result.order_id?.toString() ||
+          result.order?.id?.toString() ||
+          result.data?.id?.toString() ||
+          result.data?.order_id?.toString() ||
+          result.data?.order_number?.toString();
+
+        const purchasePayload = buildMetaPurchasePayload({
+          cart,
+          dropshippingItems,
+          total,
+          deliveryCharge,
+          orderId,
+          paymentMethod: orderData.payment_method,
+          shippingArea: orderData.shipping_address.area,
+          customer: {
+            name: orderData.shipping_address.name,
+            email: orderData.shipping_address.email,
+            phone: orderData.shipping_address.phone,
+            address: orderData.shipping_address.address,
+          },
+        });
+
+        void sendMetaPurchaseEvent(purchasePayload, token);
+
         // If online payment, return payment URL
         if (result.payment_url) {
           return {
@@ -689,8 +718,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
         }
 
         // COD order - clear cart and return order ID
-        const orderId = result.order_id?.toString() || result.order?.id?.toString();
-
         // Create new cart after successful order
         const newCart = await createCart();
         if (newCart && newCart.id) {
@@ -711,7 +738,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [cartId, cart, dropshippingItems.length]);
+  }, [cartId, cart, dropshippingItems, total, deliveryCharge]);
 
   const handleContinueAsGuest = useCallback(async () => {
     // Set guest mode
