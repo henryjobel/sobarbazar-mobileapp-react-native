@@ -663,17 +663,22 @@ export function CartProvider({ children }: { children: ReactNode }) {
         orderPayload.delivery_method = orderData.delivery_method;
       }
 
-      // For guest users, add all required fields
-      if (!isAuthenticated) {
-        orderPayload.name = orderData.shipping_address.name;
-        orderPayload.email = orderData.shipping_address.email;
-        orderPayload.phone = orderData.shipping_address.phone;
+      if (orderData.notes) {
+        orderPayload.notes = orderData.notes;
+      }
+
+      // Always include the contact/shipping fields the user filled in on the
+      // checkout form, even when they're logged in. The backend only treats
+      // the request as "authenticated" if the stored JWT is still valid; this
+      // app has no token-refresh flow, so a token that quietly expired would
+      // otherwise make the backend fall back to guest handling and reject the
+      // order for missing name/email/phone. Sending them unconditionally is a
+      // no-op for genuinely authenticated requests and a safety net otherwise.
+      orderPayload.name = orderData.shipping_address.name;
+      orderPayload.email = orderData.shipping_address.email;
+      orderPayload.phone = orderData.shipping_address.phone;
+      if (orderData.shipping_address.address) {
         orderPayload.shipping_address = orderData.shipping_address.address;
-      } else {
-        // For authenticated users, only add shipping_address if provided
-        if (orderData.shipping_address.address) {
-          orderPayload.shipping_address = orderData.shipping_address.address;
-        }
       }
 
       __DEV__ && __DEV__ && console.log('📦 CartContext: Order payload:', orderPayload);
@@ -687,9 +692,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         const orderId =
           result.order_id?.toString() ||
           result.order?.id?.toString() ||
-          result.data?.id?.toString() ||
-          result.data?.order_id?.toString() ||
-          result.data?.order_number?.toString();
+          result.order?.order_number?.toString();
 
         const purchasePayload = buildMetaPurchasePayload({
           cart,

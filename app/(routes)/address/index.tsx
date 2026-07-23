@@ -48,6 +48,8 @@ const LABELS = [
 ];
 
 const BASE_URL = 'https://api.hetdcl.com';
+// NOTE: this backend's SIMPLE_JWT only accepts the "JWT" auth header scheme
+// (not "Bearer") - see utils/api.js getHeaders() for details.
 
 export default function AddressScreen() {
   const router = useRouter();
@@ -79,7 +81,7 @@ export default function AddressScreen() {
     try {
       const res = await fetch(`${BASE_URL}/api/v1.0/customers/addresses/`, {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `JWT ${token}`,
           'Content-Type': 'application/json',
         },
       });
@@ -184,7 +186,7 @@ export default function AddressScreen() {
       const res = await fetch(url, {
         method: editingAddress ? 'PUT' : 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `JWT ${token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(formData),
@@ -221,7 +223,7 @@ export default function AddressScreen() {
                 {
                   method: 'DELETE',
                   headers: {
-                    'Authorization': `Bearer ${token}`,
+                    'Authorization': `JWT ${token}`,
                   },
                 }
               );
@@ -248,7 +250,7 @@ export default function AddressScreen() {
         {
           method: 'PATCH',
           headers: {
-            'Authorization': `Bearer ${token}`,
+            'Authorization': `JWT ${token}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ is_default: true }),

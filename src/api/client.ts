@@ -342,11 +342,12 @@ class ApiClient {
 
   /**
    * Add authorization header
+   * NOTE: this backend's SIMPLE_JWT only accepts the "JWT" scheme, not "Bearer".
    */
-  withAuth(token: string, useJWT = false): RequestConfig {
+  withAuth(token: string, _useJWT = true): RequestConfig {
     return {
       headers: {
-        Authorization: useJWT ? `JWT ${token}` : `Bearer ${token}`,
+        Authorization: `JWT ${token}`,
       },
     };
   }

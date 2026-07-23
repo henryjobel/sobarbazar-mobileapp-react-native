@@ -15,8 +15,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../../context';
+import { extractApiErrorMessage } from '../../../utils/api';
 
 const BASE_URL = 'https://api.hetdcl.com';
+// NOTE: this backend's SIMPLE_JWT only accepts the "JWT" auth header scheme
+// (not "Bearer") - see utils/api.js getHeaders() for details.
 
 export default function SecurityScreen() {
   const router = useRouter();
@@ -76,7 +79,7 @@ export default function SecurityScreen() {
       const res = await fetch(`${BASE_URL}/auth/users/set_password/`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `JWT ${token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -100,11 +103,13 @@ export default function SecurityScreen() {
           ]
         );
       } else {
-        const data = await res.json();
-        if (data.current_password) {
+        const data = await res.json().catch(() => null);
+        // Backend wraps errors as {success:false, message: <string | {field: [msgs]}>}
+        const fieldErrors = (data?.message && typeof data.message === 'object') ? data.message : data;
+        if (fieldErrors?.current_password) {
           setErrors({ current_password: 'Current password is incorrect' });
         } else {
-          Alert.alert('Error', data.detail || 'Failed to change password. Please try again.');
+          Alert.alert('Error', extractApiErrorMessage(data, 'Failed to change password. Please try again.'));
         }
       }
     } catch (error) {

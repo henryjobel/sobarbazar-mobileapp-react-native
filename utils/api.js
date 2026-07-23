@@ -8,18 +8,50 @@ const BASE_URL = Constants.expoConfig?.extra?.apiUrl || "https://api.hetdcl.com"
 const AUTH_URL = Constants.expoConfig?.extra?.authApiUrl || "https://api.hetdcl.com";
 
 // Helper function for headers
-const getHeaders = (token = null, useJWT = false) => {
+// IMPORTANT: This backend's SIMPLE_JWT config only accepts the "JWT" auth header
+// scheme (AUTH_HEADER_TYPES = ("JWT",)), NOT "Bearer". Sending "Bearer <token>"
+// is silently ignored by JWTAuthentication (request.user stays anonymous, no
+// error is raised), which used to cause logged-in users to be treated as guests
+// on every authenticated call (orders, favorites, profile, etc). Always use JWT.
+const getHeaders = (token = null, _useJWT = true) => {
   const headers = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   };
 
   if (token) {
-    // Use JWT for auth endpoints, Bearer for all others
-    headers['Authorization'] = useJWT ? `JWT ${token}` : `Bearer ${token}`;
+    headers['Authorization'] = `JWT ${token}`;
   }
 
   return headers;
+};
+
+// Backend wraps every response as {success, message, data} (see DefaultRenderer).
+// On error, "message" can be a plain string OR a dict of field -> [messages],
+// and there is never a top-level "error"/"detail" key. This normalizes both.
+export const extractApiErrorMessage = (raw, fallback = 'Something went wrong') => {
+  const dig = (val) => {
+    if (!val) return null;
+    if (typeof val === 'string') return val;
+    if (Array.isArray(val)) return dig(val[0]);
+    if (typeof val === 'object') {
+      const firstKey = Object.keys(val)[0];
+      if (firstKey) return dig(val[firstKey]);
+    }
+    return null;
+  };
+
+  const message = dig(raw?.message) || dig(raw?.error) || dig(raw?.detail) || dig(raw?.details);
+  return message || fallback;
+};
+
+// Unwrap the backend's {success, message, data} envelope, falling back to the
+// raw payload if it isn't wrapped (keeps this resilient to either shape).
+const unwrapApiData = (raw) => {
+  if (raw && typeof raw === 'object' && !Array.isArray(raw) && raw.data !== undefined) {
+    return raw.data;
+  }
+  return raw;
 };
 
 // Helper to parse API response
@@ -728,21 +760,21 @@ export async function getCart(cartId) {
 }
 
 // Get or create cart - helper function
+//
+// IMPORTANT: This intentionally does NOT call getCarts()/reuse an existing
+// cart. The backend's /carts/ list endpoint (CustomerCartModelMixin) has
+// permission_classes = [AllowAny] and its queryset is CustomerCart.objects.all()
+// with NO per-user/session filtering and no pagination - it returns every cart
+// ever created by every guest/customer in the system. Previously this function
+// grabbed carts[0] (an arbitrary, often unrelated cart) whenever the device had
+// no locally-stored cart id, meaning a fresh install or a cleared app could get
+// silently attached to a stranger's cart (wrong items, wrong totals, stock
+// conflicts, and checkout failures like "Price cannot be zero"). Each device
+// must always get its own freshly created cart instead.
 export async function getOrCreateCart() {
-  __DEV__ && console.log("🛒 Getting or creating cart...");
+  __DEV__ && console.log("🛒 Creating a new cart for this device...");
 
   try {
-    // First try to get existing carts
-    const carts = await getCarts();
-
-    if (carts && carts.length > 0) {
-      // Return the most recent cart (first one)
-      __DEV__ && console.log("✅ Found existing cart:", carts[0].id);
-      return carts[0];
-    }
-
-    // No existing cart, create a new one
-    __DEV__ && console.log("🛒 No existing cart, creating new one...");
     const newCart = await createCart();
     return newCart;
   } catch (err) {
@@ -897,63 +929,101 @@ export async function clearCart(cartId) {
 // Backend requires: cart_id, payment_method (COD/OP), area (IN/OUT)
 // For guests: also requires name, email, phone, shipping_address
 
+function buildOrderPayload(orderData) {
+  const payload = {
+    cart_id: orderData.cart_id,
+    payment_method: orderData.payment_method || 'COD', // COD or OP
+    area: orderData.area || 'IN', // IN (Inside Dhaka) or OUT (Outside Dhaka)
+  };
+
+  if (orderData.delivery_method) {
+    payload.delivery_method = orderData.delivery_method;
+  }
+
+  if (orderData.notes) {
+    payload.notes = orderData.notes;
+  }
+
+  // Always include guest-style contact fields when we have them, even for
+  // logged-in users. The backend only treats a request as "authenticated" if
+  // the JWT is valid and unexpired; if a stored token has silently expired
+  // (there is no refresh-token flow in this app) the backend falls back to
+  // treating the order as a guest order and requires these fields. Sending
+  // them unconditionally makes checkout resilient to that case, and is a
+  // no-op for the backend when the user really is authenticated.
+  const name = orderData.name || orderData.guest_name;
+  const email = orderData.email || orderData.guest_email;
+  const phone = orderData.phone || orderData.guest_phone;
+  if (name) payload.name = name;
+  if (email) payload.email = email;
+  if (phone) payload.phone = phone;
+  if (orderData.shipping_address) payload.shipping_address = orderData.shipping_address;
+
+  return payload;
+}
+
 export async function createOrder(orderData, token = null) {
   const url = `${BASE_URL}/api/v1.0/customers/orders/`;
 
   __DEV__ && console.log("📦 Create Order URL:", url);
   __DEV__ && console.log("📦 Create Order Data:", JSON.stringify(orderData).substring(0, 500));
 
-  try {
-    // Build the order payload based on backend requirements
-    const payload = {
-      cart_id: orderData.cart_id,
-      payment_method: orderData.payment_method || 'COD', // COD or OP
-      area: orderData.area || 'IN', // IN (Inside Dhaka) or OUT (Outside Dhaka)
-    };
-
-    // For guest orders, add guest fields
-    if (!token || orderData.is_guest) {
-      payload.name = orderData.name || orderData.guest_name;
-      payload.email = orderData.email || orderData.guest_email;
-      payload.phone = orderData.phone || orderData.guest_phone;
-      payload.shipping_address = orderData.shipping_address;
-    }
-
+  const doRequest = async (useToken) => {
+    const payload = buildOrderPayload(orderData);
     __DEV__ && console.log("📦 Order Payload:", JSON.stringify(payload));
 
     const res = await fetch(url, {
       method: 'POST',
-      headers: getHeaders(token),
+      headers: getHeaders(useToken),
       body: JSON.stringify(payload),
     });
 
     __DEV__ && console.log("📊 Create Order Status:", res.status);
 
-    const data = await parseResponse(res);
-    __DEV__ && console.log("✅ Create Order Response:", JSON.stringify(data).substring(0, 500));
+    const raw = await parseResponse(res);
+    __DEV__ && console.log("✅ Create Order Response:", JSON.stringify(raw).substring(0, 500));
+
+    return { res, raw };
+  };
+
+  try {
+    let { res, raw } = await doRequest(token);
+
+    // If the session token has expired/is invalid, the backend rejects the
+    // request outright (401) before it can fall back to guest handling.
+    // Retry once as a guest using the contact details already on the form -
+    // this keeps checkout working even when the app's stored token is stale,
+    // instead of surfacing "Order Failed" to the user.
+    if (!res.ok && res.status === 401 && token) {
+      __DEV__ && console.log("⚠️ Create Order got 401 with token, retrying as guest...");
+      ({ res, raw } = await doRequest(null));
+    }
+
+    const body = unwrapApiData(raw);
 
     if (!res.ok) {
-      __DEV__ && console.log("❌ Create Order Failed:", data);
+      __DEV__ && console.log("❌ Create Order Failed:", raw);
       return {
         success: false,
-        error: data?.error || data?.detail || 'Failed to create order',
+        error: extractApiErrorMessage(raw, 'Failed to create order'),
+        status: res.status,
       };
     }
 
-    // If online payment, response contains GatewayPageURL
-    if (data && data.GatewayPageURL) {
+    // If online payment, response contains GatewayPageURL (nested under `data`)
+    if (body && body.GatewayPageURL) {
       return {
         success: true,
-        payment_url: data.GatewayPageURL,
-        data,
+        payment_url: body.GatewayPageURL,
+        order: body,
       };
     }
 
     // COD order - return order data
     return {
       success: true,
-      order: data,
-      order_id: data?.id,
+      order: body,
+      order_id: body?.id ?? body?.order_id ?? body?.order_number,
     };
   } catch (err) {
     __DEV__ && console.log("❌ Create Order Error:", err.message);
@@ -1011,7 +1081,8 @@ export async function getOrderById(orderId, token) {
       throw new Error('Order not found');
     }
     
-    const data = await parseResponse(res);
+    const raw = await parseResponse(res);
+    const data = unwrapApiData(raw);
     __DEV__ && console.log("✅ Order Detail Response:", data ? 'Received' : 'No data');
     return data;
   } catch (err) {

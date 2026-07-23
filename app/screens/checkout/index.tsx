@@ -76,10 +76,12 @@ export default function CheckoutScreen() {
   useEffect(() => {
     fetch(`${API_BASE_URL}/api/v1.0/stores/delivery/available-methods/`)
       .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data?.methods?.length) {
-          setAvailableMethods(data.methods);
-          setSelectedDelivery(data.methods[0]);
+      .then(json => {
+        // Backend wraps responses as {success, message, data: {...}}
+        const methods = json?.data?.methods ?? json?.methods;
+        if (methods?.length) {
+          setAvailableMethods(methods);
+          setSelectedDelivery(methods[0]);
         }
       })
       .catch(() => {});
