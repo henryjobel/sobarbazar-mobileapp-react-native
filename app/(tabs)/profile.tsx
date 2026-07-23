@@ -1,11 +1,12 @@
 import { Ionicons } from '@expo/vector-icons'
 import Constants from 'expo-constants'
 import { router, useRouter } from 'expo-router'
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Image, ScrollView, Text, TouchableOpacity, View, ActivityIndicator, StatusBar } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuth } from '@/context/AuthContext'
 import { useWishlist } from '@/context/WishlistContext'
+import { getOrders } from '@/utils/api'
 
 type ProfileMenuItem = {
   id: string;
@@ -130,10 +131,27 @@ const menuItems: ProfileMenuItem[] = [
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { user, isAuthenticated, isLoading, logout } = useAuth();
+  const { user, isAuthenticated, isLoading, token, logout } = useAuth();
   const { itemCount: wishlistCount } = useWishlist();
+
+  // The backend's profile endpoint has no orders_count/total_orders field -
+  // it was never going to be populated by reading those. Fetch the real
+  // order list once and use its length instead.
+  const [ordersCount, setOrdersCount] = useState(0);
+  useEffect(() => {
+    if (!isAuthenticated || !token) {
+      setOrdersCount(0);
+      return;
+    }
+    let cancelled = false;
+    getOrders(token).then(orders => {
+      if (!cancelled) setOrdersCount(Array.isArray(orders) ? orders.length : 0);
+    });
+    return () => { cancelled = true; };
+  }, [isAuthenticated, token]);
+
   const profileStats = {
-    orders: (user as any)?.orders_count ?? (user as any)?.total_orders ?? 0,
+    orders: ordersCount,
     wishlist: wishlistCount,
     status: user?.is_email_verified ? 'Verified' : 'Active',
     coupons: (user as any)?.coupon_count ?? 0,

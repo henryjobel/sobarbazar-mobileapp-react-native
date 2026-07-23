@@ -8,7 +8,6 @@ import {
   Alert,
   Dimensions,
   FlatList,
-  Platform,
   ScrollView,
   Share,
   StatusBar,
@@ -17,8 +16,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import PersistentTabBar from '@/components/ui/PersistentTabBar';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCart } from '@/context/CartContext';
 import { useWishlist } from '@/context/WishlistContext';
 import { getProductById, getProducts } from '@/utils/api';
@@ -79,6 +77,7 @@ const PRODUCT_BENEFITS = [
 export default function ProductDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { addItem } = useCart();
   const { isInWishlist, addToWishlist, removeFromWishlist } = useWishlist();
 
@@ -228,23 +227,33 @@ export default function ProductDetailScreen() {
   };
 
   const getProductImage = () => {
-    if (selectedVariant?.image) return selectedVariant.image;
-    if (product?.images && product.images.length > 0) return product.images[0].image;
-    if (product?.default_variant?.image) return product.default_variant.image;
-    return 'https://via.placeholder.com/400';
+    if (selectedVariant?.image) return ensureAbsoluteUrl(selectedVariant.image);
+    if (product?.images && product.images.length > 0) return ensureAbsoluteUrl(product.images[0].image);
+    if (product?.default_variant?.image) return ensureAbsoluteUrl(product.default_variant.image);
+    return ensureAbsoluteUrl(null);
   };
 
   const getImages = () => {
     if (selectedVariant?.image) {
-      return [{ id: selectedVariant.id, image: selectedVariant.image }];
+      return [{ id: selectedVariant.id, image: ensureAbsoluteUrl(selectedVariant.image) }];
     }
-    if (product?.images && product.images.length > 0) return product.images;
-    if (product?.default_variant?.image) return [{ id: 0, image: product.default_variant.image }];
-    return [{ id: 0, image: 'https://via.placeholder.com/400' }];
+    if (product?.images && product.images.length > 0) {
+      return product.images.map((image) => ({
+        ...image,
+        image: ensureAbsoluteUrl(image.image),
+      }));
+    }
+    if (product?.default_variant?.image) {
+      return [{ id: 0, image: ensureAbsoluteUrl(product.default_variant.image) }];
+    }
+    return [{ id: 0, image: ensureAbsoluteUrl(null) }];
   };
 
-  const ensureAbsoluteUrl = (url?: string | null): string => {
-    if (!url) return 'https://via.placeholder.com/300x300/f3f8f1/299e60?text=Product';
+  const ensureAbsoluteUrl = (
+    url?: string | null,
+    fallback = 'https://via.placeholder.com/300x300/f3f8f1/299e60?text=Product',
+  ): string => {
+    if (!url) return fallback;
     if (url.startsWith('http://') || url.startsWith('https://')) return url;
     return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
   };
@@ -342,7 +351,10 @@ export default function ProductDetailScreen() {
         </View>
       </SafeAreaView>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 118 + insets.bottom }]}
+      >
         <LinearGradient colors={['#e9fbf0', '#fff6e7']} style={styles.heroSection}>
           <View style={styles.heroGlowOne} />
           <View style={styles.heroGlowTwo} />
@@ -527,9 +539,15 @@ export default function ProductDetailScreen() {
               activeOpacity={0.85}
             >
               <Image
-                source={{ uri: product.store.logo || 'https://via.placeholder.com/60' }}
+                source={{
+                  uri: ensureAbsoluteUrl(
+                    product.store.logo,
+                    'https://via.placeholder.com/120/eaf8ef/299e60?text=Shop',
+                  ),
+                }}
                 style={styles.storeLogo}
-                contentFit="cover"
+                contentFit="contain"
+                transition={200}
               />
               <View style={styles.storeInfo}>
                 <Text style={styles.storeLabel}>Sold by</Text>
@@ -613,7 +631,7 @@ export default function ProductDetailScreen() {
         </View>
       </ScrollView>
 
-      <View style={styles.bottomBar}>
+      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
         <View style={styles.bottomPriceBox}>
           <Text style={styles.bottomPriceLabel}>Payable</Text>
           <Text style={styles.bottomPrice}>{formatPrice(totalPrice || currentPrice)}</Text>
@@ -645,7 +663,6 @@ export default function ProductDetailScreen() {
         </TouchableOpacity>
       </View>
 
-      <PersistentTabBar />
     </View>
   );
 }
@@ -727,7 +744,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   scrollContent: {
-    paddingBottom: 220,
+    paddingBottom: 118,
   },
   heroSection: {
     minHeight: 340,
@@ -1238,7 +1255,7 @@ const styles = StyleSheet.create({
   },
   bottomBar: {
     position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 88 : 70,
+    bottom: 0,
     left: 12,
     right: 12,
     flexDirection: 'row',

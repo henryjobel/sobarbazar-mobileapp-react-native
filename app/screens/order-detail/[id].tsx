@@ -16,6 +16,14 @@ import { Image } from 'expo-image';
 import { useAuth } from '../../../context';
 import { getOrderById } from '../../../utils/api';
 
+const IMAGE_BASE_URL = 'https://api.hetdcl.com';
+
+const resolveImageUrl = (url?: string | null): string | null => {
+  if (!url) return null;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  return `${IMAGE_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+};
+
 interface OrderItem {
   id: number;
   product?: {
@@ -323,13 +331,19 @@ export default function OrderDetailScreen() {
               activeOpacity={0.7}
             >
               <Image
-                source={{ uri: item.product_image || item.variant?.image || item.product?.image || item.product?.feature_image || 'https://via.placeholder.com/80' }}
+                source={{
+                  uri: resolveImageUrl(item.product_image)
+                    || resolveImageUrl(item.variant?.image)
+                    || resolveImageUrl(item.product?.image)
+                    || resolveImageUrl(item.product?.feature_image)
+                    || 'https://via.placeholder.com/80',
+                }}
                 style={styles.itemImage}
                 contentFit="cover"
               />
               <View style={styles.itemDetails}>
                 <Text style={styles.itemName} numberOfLines={2}>
-                  {item.product?.name || 'Product'}
+                  {item.product_title || item.product?.name || 'Product'}
                 </Text>
                 {item.variant && (
                   <Text style={styles.itemVariant}>

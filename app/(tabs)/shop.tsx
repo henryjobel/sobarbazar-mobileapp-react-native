@@ -120,6 +120,7 @@ export default function ShopScreen() {
 
   // URL params
   const categoryId = params.category as string | undefined;
+  const subcategoryId = params.subcategory as string | undefined;
   const brandId = params.brand as string | undefined;
   const storeId = params.store as string | undefined;
   const searchQuery = params.search as string | undefined;
@@ -140,6 +141,7 @@ export default function ShopScreen() {
   const [totalPages, setTotalPages] = useState(1);
 
   const [selectedCategory, setSelectedCategory] = useState<string | null>(categoryId || null);
+  const [selectedSubcategory, setSelectedSubcategory] = useState<string | null>(subcategoryId || null);
   const [selectedBrand, setSelectedBrand] = useState<string | null>(brandId || null);
   const [selectedStore, setSelectedStore] = useState<string | null>(storeId || null);
   const [selectedRating, setSelectedRating] = useState<number | null>(null);
@@ -158,7 +160,7 @@ export default function ShopScreen() {
   const [exclusiveProducts, setExclusiveProducts] = useState<ExclusiveProduct[]>([]);
   const [addingExclusiveId, setAddingExclusiveId] = useState<number | null>(null);
 
-  const shouldIncludeExclusive = !selectedCategory && !selectedBrand && !selectedStore;
+  const shouldIncludeExclusive = !selectedCategory && !selectedSubcategory && !selectedBrand && !selectedStore;
 
   const fetchExclusiveProducts = useCallback(async () => {
     if (!shouldIncludeExclusive) { setExclusiveProducts([]); return; }
@@ -179,6 +181,7 @@ export default function ShopScreen() {
       // Build query params exactly like frontend
       const params: string[] = [];
       if (selectedCategory) params.push(`supplier_product__subcategories__category=${selectedCategory}`);
+      if (selectedSubcategory) params.push(`supplier_product__subcategories=${selectedSubcategory}`);
       if (selectedBrand) params.push(`supplier_product__brand_or_company=${selectedBrand}`);
       if (selectedStore) params.push(`supplier_product__store=${selectedStore}`);
       if (searchText) params.push(`search=${encodeURIComponent(searchText)}`);
@@ -248,7 +251,7 @@ export default function ShopScreen() {
       setIsRefreshing(false);
       setIsLoadingMore(false);
     }
-  }, [selectedCategory, selectedBrand, selectedStore, searchText, selectedRating, priceRange, sortBy]);
+  }, [selectedCategory, selectedSubcategory, selectedBrand, selectedStore, searchText, selectedRating, priceRange, sortBy]);
 
   // Fetch categories
   const fetchCategories = useCallback(async () => {
@@ -324,7 +327,7 @@ export default function ShopScreen() {
     fetchExclusiveProducts();
     // Keep this scoped to filter controls so typing in search does not refetch on every keypress.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCategory, selectedBrand, selectedStore, selectedRating, sortBy]);
+  }, [selectedCategory, selectedSubcategory, selectedBrand, selectedStore, selectedRating, sortBy]);
 
   // Fetch store data when store filter changes
   useEffect(() => {
@@ -397,6 +400,7 @@ export default function ShopScreen() {
   // Clear all filters
   const clearAllFilters = () => {
     setSelectedCategory(null);
+    setSelectedSubcategory(null);
     setSelectedBrand(null);
     setSelectedStore(null);
     setSelectedRating(null);
@@ -703,6 +707,7 @@ export default function ShopScreen() {
                   style={[styles.filterItem, !selectedCategory && styles.filterItemActive]}
                   onPress={() => {
                     setSelectedCategory(null);
+                    setSelectedSubcategory(null);
                     setShowFilterModal(false);
                   }}
                 >
@@ -715,6 +720,7 @@ export default function ShopScreen() {
                     style={[styles.filterItem, selectedCategory === cat.id.toString() && styles.filterItemActive]}
                     onPress={() => {
                       setSelectedCategory(cat.id.toString());
+                      setSelectedSubcategory(null);
                       setShowFilterModal(false);
                     }}
                   >

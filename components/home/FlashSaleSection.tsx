@@ -29,9 +29,11 @@ interface Product {
     };
     stock?: number;
     available_stock?: number;
+    sold?: number;
     image?: string;
   };
   images?: { image: string }[];
+  sold?: number;
 }
 
 interface FlashSaleSectionProps {
@@ -205,9 +207,18 @@ const FlashSaleSection: React.FC<FlashSaleSectionProps> = ({
     return 0;
   };
 
-  const getSoldProgress = () => {
-    // Calculate a random sold percentage for visual effect
-    return Math.floor(Math.random() * 60) + 30;
+  const getSoldProgress = (product: Product) => {
+    // Derived purely from stable product data (sold vs. total stock), same
+    // formula the shop/web listings use - NOT random. Previously this
+    // returned Math.random() on every call, and since it's read from inside
+    // the render loop while the countdown timer re-renders this component
+    // every second, the bar (and its "X% sold" label) visibly jumped around
+    // once a second even though nothing about the product had changed.
+    const variant = product.default_variant;
+    const sold = variant?.sold ?? product.sold ?? 0;
+    const total = variant?.available_stock || variant?.stock || 0;
+    if (!total) return 0;
+    return Math.min(Math.max((sold / total) * 100, 0), 100);
   };
 
   const formatTime = (value: number) => String(value).padStart(2, '0');
@@ -245,7 +256,7 @@ const FlashSaleSection: React.FC<FlashSaleSectionProps> = ({
         {displayProducts.map((product) => {
           const variant = product.default_variant;
           const discountPercent = getDiscountPercent(product);
-          const soldPercent = getSoldProgress();
+          const soldPercent = getSoldProgress(product);
 
           const widthAnim = progressAnim.interpolate({
             inputRange: [0, 1],
@@ -295,7 +306,7 @@ const FlashSaleSection: React.FC<FlashSaleSectionProps> = ({
                   </View>
 
                   <View style={styles.progressStats}>
-                    <Text style={styles.soldText}>{soldPercent}% sold</Text>
+                    <Text style={styles.soldText}>{Math.round(soldPercent)}% sold</Text>
                     <Text style={styles.remainingText}>
                       {variant?.available_stock || variant?.stock || 'Limited'} left
                     </Text>

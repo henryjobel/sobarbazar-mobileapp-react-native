@@ -20,14 +20,22 @@ import { useCart, useWishlist } from '../../../context';
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48) / 2;
 
+interface ProductVariant {
+  id: number;
+  name?: string;
+  price: number;
+  final_price: number;
+  stock?: number;
+  available_stock?: number;
+  sold?: number;
+}
+
 interface Product {
   id: number;
   name: string;
-  slug: string;
-  price: number;
-  sale_price?: number;
-  image: string;
-  images?: string[];
+  slug?: string;
+  default_variant?: ProductVariant;
+  images?: { image: string }[];
   category?: { id: number; name: string };
   rating?: number;
   stock?: number;
@@ -164,10 +172,14 @@ export default function SearchScreen() {
 
   const renderProductCard = ({ item }: { item: Product }) => {
     const isWishlisted = isInWishlist(item.id);
-    const hasDiscount = item.sale_price && item.sale_price < item.price;
+    const variant = item.default_variant;
+    const price = variant?.final_price ?? variant?.price ?? 0;
+    const originalPrice = variant?.price ?? 0;
+    const hasDiscount = originalPrice > price;
     const discountPercent = hasDiscount
-      ? Math.round(((item.price - (item.sale_price || 0)) / item.price) * 100)
+      ? Math.round(((originalPrice - price) / originalPrice) * 100)
       : 0;
+    const imageUrl = item.images?.[0]?.image || 'https://via.placeholder.com/150';
 
     return (
       <TouchableOpacity
@@ -177,7 +189,7 @@ export default function SearchScreen() {
       >
         <View style={styles.imageContainer}>
           <Image
-            source={{ uri: item.image || 'https://via.placeholder.com/150' }}
+            source={{ uri: imageUrl }}
             style={styles.productImage}
             contentFit="cover"
           />
@@ -205,16 +217,16 @@ export default function SearchScreen() {
 
           <View style={styles.priceRow}>
             <Text style={styles.currentPrice}>
-              {formatPrice(item.sale_price || item.price)}
+              {formatPrice(price)}
             </Text>
             {hasDiscount && (
               <Text style={styles.originalPrice}>
-                {formatPrice(item.price)}
+                {formatPrice(originalPrice)}
               </Text>
             )}
           </View>
 
-          {item.rating && (
+          {!!item.rating && (
             <View style={styles.ratingRow}>
               <Ionicons name="star" size={12} color="#F59E0B" />
               <Text style={styles.ratingText}>{item.rating.toFixed(1)}</Text>

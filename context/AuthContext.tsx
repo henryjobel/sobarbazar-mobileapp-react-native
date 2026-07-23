@@ -15,6 +15,33 @@ interface User {
   is_active?: boolean;
   date_joined?: string;
   is_email_verified?: boolean;
+  shipping_address?: string;
+  customer?: {
+    name?: string;
+    email?: string;
+    phone?: string;
+    shipping_address?: string;
+    profile_image?: string;
+    gender?: string;
+  };
+}
+
+// The backend (/auth/users/me/) nests real profile data under `customer`
+// ({name, email, phone, shipping_address}) rather than at the top level -
+// the top-level object only has {id, username, employee, role, customer}.
+// Flatten it here once so every screen can keep reading user.name/email/phone
+// without needing to know about the nested shape.
+function normalizeProfile(profile: any): User {
+  if (!profile) return profile;
+  const customer = profile.customer;
+  return {
+    ...profile,
+    name: profile.name || customer?.name,
+    email: profile.email || customer?.email,
+    phone: profile.phone || customer?.phone,
+    shipping_address: profile.shipping_address || customer?.shipping_address,
+    avatar: profile.avatar || customer?.profile_image,
+  };
 }
 
 interface AuthTokens {
@@ -89,7 +116,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const user = JSON.parse(userStr) as User;
 
         // Verify token is still valid by fetching user profile
-        const profile = await getUserProfile(tokens.access);
+        const rawProfile = await getUserProfile(tokens.access);
+        const profile = normalizeProfile(rawProfile);
 
         if (profile) {
           setState({
@@ -178,7 +206,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       };
 
       // Fetch user profile
-      const profile = await getUserProfile(tokens.access);
+      const profile = normalizeProfile(await getUserProfile(tokens.access));
 
       if (!profile) {
         // Even if profile fetch fails, we have valid tokens
@@ -251,7 +279,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
 
         // Try to fetch user profile
-        const profile = await getUserProfile(tokens.access);
+        const profile = normalizeProfile(await getUserProfile(tokens.access));
 
         if (profile) {
           await persistAuth(tokens, profile);
@@ -308,13 +336,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  const updateProfile = async (data: Partial<User>): Promise<{ success: boolean; error?: string }> => {
+  const updateProfile = async (data: Partial<User> & { first_name?: string; last_name?: string }): Promise<{ success: boolean; error?: string }> => {
     try {
       if (!state.tokens?.access) {
         return { success: false, error: 'Not authenticated' };
       }
 
-      const updatedUser = await updateUserProfile(data, state.tokens.access);
+      // The backend only accepts profile edits nested under `customer`
+      // ({name, email, phone, shipping_address}) - it has no top-level
+      // name/phone/shipping_address fields on the user record itself.
+      const name = data.name || [data.first_name, data.last_name].filter(Boolean).join(' ').trim();
+      const customerPayload: Record<string, any> = {};
+      if (name) customerPayload.name = name;
+      if (data.phone) customerPayload.phone = data.phone;
+      if (data.shipping_address) customerPayload.shipping_address = data.shipping_address;
+
+      const rawUpdated = await updateUserProfile({ customer: customerPayload }, state.tokens.access);
+      const updatedUser = normalizeProfile(rawUpdated?.data ?? rawUpdated);
 
       if (!updatedUser) {
         return { success: false, error: 'Failed to update profile' };
@@ -324,7 +362,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setState(prev => ({
         ...prev,
-        user: updatedUser,
+        user: { ...prev.user, ...updatedUser },
       }));
 
       return { success: true };
@@ -338,7 +376,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!state.tokens?.access) return;
 
     try {
-      const profile = await getUserProfile(state.tokens.access);
+      const profile = normalizeProfile(await getUserProfile(state.tokens.access));
       if (profile) {
         await persistUser(profile);
         setState(prev => ({ ...prev, user: profile }));

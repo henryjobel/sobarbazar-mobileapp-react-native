@@ -4,7 +4,8 @@ import { useWishlist } from '@/context/WishlistContext';
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Custom Tab Bar Icon with Badge
 interface TabIconProps {
@@ -47,13 +48,21 @@ function TabLabel({ label, focused, color }: { label: string; focused: boolean; 
 export default function TabLayout() {
   const { itemCount: cartCount } = useCart();
   const { itemCount: wishlistCount } = useWishlist();
+  const insets = useSafeAreaInsets();
+  const bottomPadding = Math.max(insets.bottom, 8);
 
   return (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: '#299e60',
         tabBarInactiveTintColor: '#6B7280',
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: [
+          styles.tabBar,
+          {
+            height: 60 + bottomPadding,
+            paddingBottom: bottomPadding,
+          },
+        ],
         tabBarItemStyle: styles.tabBarItem,
         headerShown: false,
         tabBarButton: HapticTab,
@@ -192,7 +201,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: Platform.OS === 'ios' ? 88 : 70,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 0,
     elevation: 20,
@@ -201,7 +209,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 12,
     paddingTop: 8,
-    paddingBottom: Platform.OS === 'ios' ? 28 : 10,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
   },

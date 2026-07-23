@@ -10,7 +10,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { Image } from "expo-image";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCart } from "../../context/CartContext";
 import {
   formatCartVariantAttributes,
@@ -22,6 +22,8 @@ import {
 
 export default function CartPage() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = 60 + Math.max(insets.bottom, 8);
   const {
     cart,
     isLoading,
@@ -231,7 +233,7 @@ export default function CartPage() {
         <>
           {/* Cart Items List */}
           <ScrollView
-            contentContainerStyle={{ paddingBottom: 280 }}
+            contentContainerStyle={{ paddingBottom: 300 + tabBarHeight }}
             showsVerticalScrollIndicator={false}
             refreshControl={
               <RefreshControl
@@ -352,7 +354,10 @@ export default function CartPage() {
           </ScrollView>
 
           {/* Bottom Summary Panel */}
-          <View className="absolute bottom-0 left-0 right-0 bg-white px-6 pt-5 pb-8 rounded-t-3xl shadow-2xl border-t border-gray-100">
+          <View
+            className="absolute left-0 right-0 bg-white px-6 pt-5 pb-5 rounded-t-3xl shadow-2xl border-t border-gray-100"
+            style={{ bottom: tabBarHeight }}
+          >
             {/* Price Breakdown */}
             <View className="space-y-3 mb-5">
               <View className="flex-row justify-between">

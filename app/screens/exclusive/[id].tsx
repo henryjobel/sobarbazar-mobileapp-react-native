@@ -13,7 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCart } from '@/context/CartContext';
 import { getExclusiveProductById } from '@/utils/api';
 import { formatHtmlText } from '@/utils/htmlText';
@@ -59,6 +59,7 @@ export default function ExclusiveProductDetail() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { addDropshippingItem } = useCart();
+  const insets = useSafeAreaInsets();
 
   const [product, setProduct] = useState<ExclusiveProduct | null>(null);
   const [loading, setLoading] = useState(true);
@@ -181,7 +182,10 @@ export default function ExclusiveProductDetail() {
         </View>
       </SafeAreaView>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 118 + insets.bottom }]}
+      >
         <LinearGradient colors={['#fff3d7', '#e9fbf0']} style={styles.heroSection}>
           <View style={styles.heroBlobOne} />
           <View style={styles.heroBlobTwo} />
@@ -336,7 +340,7 @@ export default function ExclusiveProductDetail() {
         </View>
       </ScrollView>
 
-      <View style={styles.bottomBar}>
+      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
         <View style={styles.bottomPriceWrap}>
           <Text style={styles.bottomPriceLabel}>Payable</Text>
           <Text style={styles.bottomPrice}>{formatPrice(totalPrice || getPrice())}</Text>

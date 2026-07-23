@@ -33,13 +33,21 @@ interface CategoryProps {
 const Category: React.FC<CategoryProps> = ({ categories, exclusiveCategories }) => {
   const router = useRouter();
 
-  // Format regular categories
+  // Format regular categories.
+  // Note: the home API's `subcategories` list (preferred over `categories`
+  // below in the home screen) returns SUBcategory objects, each carrying a
+  // nested `category: {id, name}` for its parent. A plain parent category
+  // has no such nested field. Detect which kind we got so taps can route to
+  // the correct query param - sending a subcategory id through `category=`
+  // filters by the wrong field on the backend and silently returns zero
+  // products.
   const regularFormatted = (categories && categories.length > 0
     ? categories.map(cat => ({
         id: cat.id,
         title: cat.name || cat.title || 'Category',
         image: cat.image || cat.icon,
         isExclusive: false,
+        isSubcategory: !!cat.category,
       }))
     : Categories);
 
@@ -59,6 +67,8 @@ const Category: React.FC<CategoryProps> = ({ categories, exclusiveCategories }) 
   const handleCategoryPress = (category: any) => {
     if (category.isExclusive) {
       router.push(`/screens/rakamari?category=${category.droploo_id}&name=${encodeURIComponent(category.title)}`);
+    } else if (category.isSubcategory) {
+      router.push(`/(tabs)/shop?subcategory=${category.id}&name=${encodeURIComponent(category.title)}`);
     } else {
       router.push(`/(tabs)/shop?category=${category.id}&name=${encodeURIComponent(category.title)}`);
     }

@@ -15,15 +15,29 @@ import { Image } from 'expo-image';
 import { useAuth } from '../../../context';
 import { getOrders } from '../../../utils/api';
 
+const IMAGE_BASE_URL = 'https://api.hetdcl.com';
+
+const resolveImageUrl = (url?: string | null): string | null => {
+  if (!url) return null;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  return `${IMAGE_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+};
+
 interface OrderItem {
   id: number;
-  product: {
+  product?: {
     id: number;
-    name: string;
-    image: string;
+    name?: string;
+    images?: { image: string }[];
   };
   quantity: number;
-  price: number;
+  // Real order-item fields from the backend - there is no flat `price`.
+  original_unit_price?: number;
+  final_unit_price?: number;
+  net_price?: number;
+  total_price?: number;
+  product_title?: string;
+  product_image?: string;
 }
 
 interface Order {
@@ -97,8 +111,8 @@ export default function MyOrdersScreen() {
     });
   };
 
-  const formatPrice = (price: number) => {
-    return `৳${price.toLocaleString()}`;
+  const formatPrice = (price: number | undefined | null) => {
+    return `৳${(price ?? 0).toLocaleString()}`;
   };
 
   const renderFilterChip = (filter: string, label: string) => (
@@ -151,16 +165,20 @@ export default function MyOrdersScreen() {
           {firstItem && (
             <View style={styles.itemPreview}>
               <Image
-                source={{ uri: firstItem.product?.image || 'https://via.placeholder.com/60' }}
+                source={{
+                  uri: resolveImageUrl(firstItem.product_image)
+                    || resolveImageUrl(firstItem.product?.images?.[0]?.image)
+                    || 'https://via.placeholder.com/60',
+                }}
                 style={styles.itemImage}
                 contentFit="cover"
               />
               <View style={styles.itemInfo}>
                 <Text style={styles.itemName} numberOfLines={2}>
-                  {firstItem.product?.name || 'Product'}
+                  {firstItem.product_title || firstItem.product?.name || 'Product'}
                 </Text>
                 <Text style={styles.itemQuantity}>
-                  Qty: {firstItem.quantity} × {formatPrice(firstItem.price)}
+                  Qty: {firstItem.quantity} × {formatPrice(firstItem.final_unit_price ?? firstItem.original_unit_price)}
                 </Text>
               </View>
             </View>

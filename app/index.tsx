@@ -1,8 +1,6 @@
-import React from 'react'
-import OnboardingScreen from './screens/onboarding/OnboardingScreen'
+import { Redirect } from 'expo-router';
 
-
-export default function index() {
-  return <OnboardingScreen />
+export default function Index() {
+  return <Redirect href="/(tabs)" />;
 }
 

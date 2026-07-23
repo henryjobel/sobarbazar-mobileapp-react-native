@@ -33,15 +33,7 @@ export default function RootLayout() {
           <Stack.Screen
             name="screens/product/[id]"
             options={{
-              headerShown: true,
-              title: 'Product Details',
-              headerStyle: {
-                backgroundColor: '#ffffff',
-              },
-              headerTintColor: '#2c4341',
-              headerTitleStyle: {
-                fontWeight: '600',
-              },
+              headerShown: false,
             }}
           />
 

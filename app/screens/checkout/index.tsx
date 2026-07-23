@@ -15,7 +15,7 @@ import {
   View,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
 import {
@@ -49,7 +49,8 @@ interface ShippingAddress {
 
 export default function CheckoutScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const insets = useSafeAreaInsets();
+  const { user, isAuthenticated } = useAuth();
   const {
     cart,
     checkout,
@@ -88,9 +89,9 @@ export default function CheckoutScreen() {
   }, []);
 
   const [address, setAddress] = useState<ShippingAddress>({
-    name: user?.name || user?.first_name || '',
-    phone: user?.phone || '',
-    email: user?.email || '',
+    name: '',
+    phone: '',
+    email: '',
     address: '',
     city: '',
     area: shippingArea,
@@ -98,6 +99,23 @@ export default function CheckoutScreen() {
   });
 
   const [errors, setErrors] = useState<Partial<ShippingAddress>>({});
+
+  // Auth loads asynchronously (SecureStore + a profile fetch), so `user` is
+  // almost always still null on the first render here. Re-sync once real
+  // profile data arrives, but only into fields the customer hasn't already
+  // started typing into themselves - never clobber a manual edit.
+  const hasPrefilledRef = React.useRef(false);
+  useEffect(() => {
+    if (!user || hasPrefilledRef.current) return;
+    hasPrefilledRef.current = true;
+    setAddress(prev => ({
+      ...prev,
+      name: prev.name || user.name || user.first_name || '',
+      phone: prev.phone || user.phone || '',
+      email: prev.email || user.email || '',
+      address: prev.address || user.shipping_address || '',
+    }));
+  }, [user]);
 
   const validateForm = (): boolean => {
     const newErrors: Partial<ShippingAddress> = {};
@@ -108,10 +126,15 @@ export default function CheckoutScreen() {
     } else if (!/^01[3-9]\d{8}$/.test(address.phone.replace(/\s/g, ''))) {
       newErrors.phone = 'Invalid phone number (e.g., 01712345678)';
     }
-    if (!address.email) {
-      newErrors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(address.email)) {
-      newErrors.email = 'Invalid email address';
+    // Logged-in users' email comes from their account and isn't editable here
+    // (and isn't sent in the order payload for authenticated checkout), so it
+    // shouldn't block submission the way guest-entered email does.
+    if (!isAuthenticated) {
+      if (!address.email) {
+        newErrors.email = 'Email is required';
+      } else if (!/\S+@\S+\.\S+/.test(address.email)) {
+        newErrors.email = 'Invalid email address';
+      }
     }
     if (!address.address.trim()) newErrors.address = 'Address is required';
 
@@ -119,7 +142,15 @@ export default function CheckoutScreen() {
     return Object.keys(newErrors).length === 0;
   };
 
+  // React state updates aren't synchronous, so `isSubmitting` alone leaves a
+  // window where a fast double-tap fires this twice before the disabled prop
+  // re-renders. Guard synchronously with a ref so a second order can never
+  // be created from rapid taps.
+  const isSubmittingRef = React.useRef(false);
+
   const handlePlaceOrder = async () => {
+    if (isSubmittingRef.current) return;
+
     if (!validateForm()) {
       Alert.alert('Error', 'Please fill in all required fields correctly');
       return;
@@ -130,6 +161,7 @@ export default function CheckoutScreen() {
       return;
     }
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
 
     try {
@@ -146,6 +178,7 @@ export default function CheckoutScreen() {
         notes,
       });
 
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
 
       if (result.success) {
@@ -167,6 +200,7 @@ export default function CheckoutScreen() {
         });
       }
     } catch (error: any) {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
       Alert.alert('Error', error.message || 'Failed to place order');
     }
@@ -200,7 +234,10 @@ export default function CheckoutScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 100 + insets.bottom }]}
+      >
         {/* Order Summary */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Order Summary</Text>
@@ -311,15 +348,15 @@ export default function CheckoutScreen() {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Email Address *</Text>
+            <Text style={styles.inputLabel}>Email Address {!isAuthenticated && '*'}</Text>
             <TextInput
-              style={[styles.input, errors.email && styles.inputError]}
+              style={[styles.input, errors.email && styles.inputError, isAuthenticated && styles.inputDisabled]}
               placeholder="Enter your email"
               value={address.email}
               onChangeText={(text) => updateAddress('email', text)}
               keyboardType="email-address"
               autoCapitalize="none"
-              editable={!isSubmitting}
+              editable={!isSubmitting && !isAuthenticated}
             />
             {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
           </View>
@@ -532,7 +569,7 @@ export default function CheckoutScreen() {
       </ScrollView>
 
       {/* Bottom Action */}
-      <View style={styles.bottomBar}>
+      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <View style={styles.bottomInfo}>
           <Text style={styles.bottomLabel}>Total Amount</Text>
           <Text style={styles.bottomPrice}>৳{total.toLocaleString()}</Text>
@@ -714,6 +751,10 @@ const styles = StyleSheet.create({
   },
   inputError: {
     borderColor: '#EF4444',
+  },
+  inputDisabled: {
+    backgroundColor: '#F3F4F6',
+    color: '#6B7280',
   },
   errorText: {
     fontSize: 12,

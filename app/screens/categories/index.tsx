@@ -21,6 +21,7 @@ interface Category {
   image?: string;
   icon?: string;
   product_count?: number;
+  customer_products_count?: number;
   subcategories?: Category[];
 }
 
@@ -80,7 +81,7 @@ export default function AllCategoriesScreen() {
   };
 
   const handleSubcategoryPress = (subcategory: Category) => {
-    router.push(`/(tabs)/shop?category=${subcategory.id}&name=${encodeURIComponent(subcategory.name)}`);
+    router.push(`/(tabs)/shop?subcategory=${subcategory.id}&name=${encodeURIComponent(subcategory.name)}`);
   };
 
   const handleGoBack = () => {
@@ -162,9 +163,9 @@ export default function AllCategoriesScreen() {
                   <Text className="text-gray-800 font-semibold text-sm" numberOfLines={2}>
                     {sub.name}
                   </Text>
-                  {sub.product_count !== undefined && (
+                  {(sub.product_count !== undefined || sub.customer_products_count !== undefined) && (
                     <Text className="text-gray-400 text-xs mt-1">
-                      {sub.product_count} products
+                      {sub.product_count ?? sub.customer_products_count} products
                     </Text>
                   )}
                 </View>
@@ -278,9 +279,9 @@ export default function AllCategoriesScreen() {
                     {category.name}
                   </Text>
                   <View className="flex-row items-center justify-between mt-2">
-                    {category.product_count !== undefined && (
+                    {(category.product_count !== undefined || category.customer_products_count !== undefined) && (
                       <Text className="text-gray-400 text-xs">
-                        {category.product_count} products
+                        {category.product_count ?? category.customer_products_count} products
                       </Text>
                     )}
                     <View className="flex-row items-center">

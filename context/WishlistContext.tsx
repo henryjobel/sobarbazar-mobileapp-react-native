@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { Alert } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { useAuth } from './AuthContext';
 import { getFavorites, addToFavorites, removeFromFavorites } from '@/utils/api';
@@ -50,20 +51,23 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
 
       if (isAuthenticated && tokens?.access) {
-        // Fetch from server
+        // Fetch from server. The backend nests the actual product data
+        // under `product_details` ({id, name, image, price, final_price,
+        // stock, available_stock}) - `item.product` is just the raw FK id.
         const serverWishlist = await getFavorites(tokens.access);
         if (serverWishlist && Array.isArray(serverWishlist)) {
-          const formattedItems = serverWishlist.map((item: any) => ({
-            id: item.id,
-            product_id: item.product?.id || item.product_id,
-            name: item.product?.name || item.name,
-            price: item.product?.price || item.price,
-            original_price: item.product?.original_price,
-            image: item.product?.image || item.product?.feature_image || item.image,
-            rating: item.product?.rating,
-            discount: item.product?.discount,
-            in_stock: item.product?.in_stock !== false,
-          }));
+          const formattedItems = serverWishlist.map((item: any) => {
+            const details = item.product_details || {};
+            return {
+              id: item.id,
+              product_id: details.id ?? item.product,
+              name: details.name,
+              price: details.final_price ?? details.price,
+              original_price: details.price,
+              image: details.image,
+              in_stock: details.available_stock !== 0,
+            };
+          });
           setItems(formattedItems);
         }
       } else {
@@ -97,9 +101,9 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
         id: Date.now(), // Temporary ID for local
         product_id: product.id,
         name: product.name || product.title,
-        price: product.price || product.variants?.[0]?.price || 0,
-        original_price: product.original_price,
-        image: product.image || product.images?.[0]?.image || product.feature_image,
+        price: product.default_variant?.final_price ?? product.default_variant?.price ?? product.price ?? product.variants?.[0]?.price ?? 0,
+        original_price: product.default_variant?.price ?? product.original_price,
+        image: product.images?.[0]?.image || product.image || product.feature_image,
         rating: product.rating,
         discount: product.discount,
         in_stock: product.in_stock !== false,
@@ -107,10 +111,17 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
 
       if (isAuthenticated && tokens?.access) {
         const response = await addToFavorites(product.id, tokens.access);
-        if (response) {
+        if (response?.success) {
           await loadWishlist(); // Refresh from server
           return true;
         }
+        // Surface the failure honestly instead of pretending it saved -
+        // silently no-oping here would leave the heart icon looking "on"
+        // while nothing was actually persisted server-side.
+        Alert.alert(
+          'Wishlist unavailable',
+          "Couldn't add this to your wishlist right now. Please try again later."
+        );
         return false;
       } else {
         const updatedItems = [...items, newItem];
